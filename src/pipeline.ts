@@ -135,6 +135,7 @@ export async function runPipeline(
     domains,
     debateEntries,
     stats: partialStats,
+    runLogger,
   });
 
   // Update final stats

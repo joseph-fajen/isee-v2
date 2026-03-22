@@ -9,7 +9,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { Logger } from '../utils/logger';
-import type { Domain, Cluster, SkepticChallenge } from '../types';
+import type { Domain, Cluster, SkepticChallenge, ExtractedIdea, DebateEntry } from '../types';
 import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/logger';
 
 // Lazy initialization
@@ -58,6 +58,18 @@ const SkepticChallengeSchema = z.object({
 
 const SkepticChallengesResponseSchema = z.object({
   challenges: z.array(SkepticChallengeSchema),
+});
+
+// Synthesis Agent schemas
+const ExtractedIdeaSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  whyEmerged: z.string(),
+  whyItMatters: z.string(),
+});
+
+const BriefingResponseSchema = z.object({
+  ideas: z.array(ExtractedIdeaSchema),
 });
 
 // Model to use for pipeline agents
@@ -551,4 +563,137 @@ Your rebuttal must NOT:
 - Be defensive in tone — engage the challenge as an intellectual peer
 
 Length: 100–150 words.`;
+}
+
+/**
+ * Generate the final briefing by selecting 3 ideas from the debate (structured output).
+ */
+export async function generateBriefingWithClaude(
+  query: string,
+  debateEntries: DebateEntry[],
+  logger: Logger
+): Promise<ExtractedIdea[]> {
+  const maxAttempts = 2;
+  const prompt = buildSynthesisPrompt(query, debateEntries);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const callContext = {
+      stage: 'synthesizer' as const,
+      model: AGENT_MODEL,
+      attempt,
+    };
+
+    logLLMCallStart(logger, callContext);
+    const startTime = Date.now();
+
+    try {
+      const response = await getClient().messages.parse({
+        model: AGENT_MODEL,
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }],
+        output_config: { format: zodOutputFormat(BriefingResponseSchema) },
+      });
+
+      const durationMs = Date.now() - startTime;
+
+      if (!response.parsed_output) {
+        throw new Error('Synthesis Agent returned no structured output');
+      }
+
+      const ideas = response.parsed_output.ideas;
+
+      // Validate we got exactly 3 ideas
+      if (ideas.length !== 3) {
+        logger.warn(
+          { ideaCount: ideas.length, expected: 3 },
+          'Unexpected idea count from Synthesis Agent'
+        );
+      }
+
+      logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(ideas).length);
+
+      return ideas;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const willRetry = attempt < maxAttempts;
+
+      logLLMCallError(logger, callContext, errorMessage, willRetry);
+
+      if (!willRetry) {
+        throw new Error(`Synthesis Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+
+  throw new Error('Unexpected: retry loop completed without result');
+}
+
+/**
+ * Build the Synthesis Agent prompt.
+ *
+ * Design intent (from PROMPTS.md):
+ * - Read full debate transcript
+ * - Select 3 ideas using: most surprising, most actionable, most assumption-challenging
+ * - Write confidence narratives
+ * - Tone: research briefing, presenting not prescribing
+ */
+function buildSynthesisPrompt(query: string, debateEntries: DebateEntry[]): string {
+  const debateText = debateEntries
+    .map(
+      (entry) => `<cluster id="${entry.clusterId}" name="${entry.clusterName}">
+<advocate_argument>
+${entry.advocateArgument}
+</advocate_argument>
+<skeptic_challenge>
+${entry.skepticChallenge}
+</skeptic_challenge>
+<rebuttal>
+${entry.rebuttal}
+</rebuttal>
+</cluster>`
+    )
+    .join('\n\n');
+
+  return `You are a research synthesis agent. You have observed a structured debate among multiple intellectual angles responding to a user's query. Your task is to select the 3 most valuable ideas and explain why each deserves the user's attention.
+
+ORIGINAL QUERY:
+${query}
+
+DEBATE TRANSCRIPT:
+The following clusters each represent a distinct intellectual angle. For each, an Advocate argued for the angle's value, a Skeptic challenged that argument, and the Advocate provided a Rebuttal.
+
+${debateText}
+
+YOUR TASK:
+Select exactly 3 ideas from the debate using these criteria. Choose ONE idea that best exemplifies each criterion:
+
+1. MOST SURPRISING
+   - Which idea is least likely to emerge from a single direct query to one AI model?
+   - What does ISEE's combinatorial approach surface that conventional prompting would miss?
+
+2. MOST ACTIONABLE
+   - Which idea points toward something concrete the user can actually do, think, or decide differently?
+   - Avoid ideas that are merely interesting but offer no clear path forward.
+
+3. MOST ASSUMPTION-CHALLENGING
+   - Which idea most directly challenges a belief or assumption the user probably holds?
+   - Look for ideas that reframe the problem or invert conventional wisdom.
+
+FOR EACH SELECTED IDEA, provide:
+- title: A concise title (5-10 words) that captures the core insight
+- description: 2-3 sentences explaining the idea itself
+- whyEmerged: 2-3 sentences explaining which angle produced this idea and how it survived the debate (reference the advocate/skeptic/rebuttal exchange)
+- whyItMatters: 2-3 sentences explaining why this idea deserves the user's attention - be specific, not generic. This is the confidence narrative.
+
+IMPORTANT CONSTRAINTS:
+- Select exactly 3 ideas, one for each criterion above
+- Each idea must come from a different cluster (no repeating clusters)
+- Your tone should be that of a research briefing: present findings and explain reasoning, but do NOT prescribe what the user should do
+- The user retains full authority over how to apply these insights
+- Avoid vague praise ("transformative", "paradigm-shifting") - be concrete and specific
+- If an idea conceded points during the rebuttal, acknowledge this honestly
+
+Respond with your selected ideas.`;
 }

@@ -14,12 +14,15 @@
  */
 
 import type { Domain, DebateEntry, ExtractedIdea, Briefing, RunStats } from '../types';
+import { generateBriefingWithClaude } from '../clients/anthropic';
+import { logger as baseLogger, type Logger } from '../utils/logger';
 
 interface SynthesizerConfig {
   query: string;
   domains: Domain[];
   debateEntries: DebateEntry[];
   stats: Partial<RunStats>;
+  runLogger?: Logger;
 }
 
 /**
@@ -29,51 +32,26 @@ interface SynthesizerConfig {
  * @returns Complete briefing document
  */
 export async function generateBriefing(config: SynthesizerConfig): Promise<Briefing> {
-  const { query, domains, debateEntries, stats } = config;
+  const { query, domains, debateEntries, stats, runLogger } = config;
+  const log = runLogger || baseLogger;
 
-  console.log(`[synthesizer] Generating briefing from ${debateEntries.length} debate entries`);
+  log.info({ debateEntryCount: debateEntries.length }, 'Synthesis agent starting');
 
-  // TODO: Phase 4 implementation
-  // - Use Anthropic Claude SDK
-  // - Design and apply Synthesis Agent prompt
-  // - Select 3 ideas with visible reasoning
-  // - Generate confidence narratives
+  // Call the LLM to select and explain 3 ideas
+  const ideas = await generateBriefingWithClaude(query, debateEntries, log);
 
-  // Stub: Return mock briefing for pipeline testing
-  const mockIdeas: ExtractedIdea[] = [
+  log.info(
     {
-      title: 'Protocol-Level Automation as Governance Bypass',
-      description:
-        'Rather than improving human decision processes, encode decisions directly into protocol rules that execute automatically. This shifts governance from deliberation to design.',
-      whyEmerged:
-        'This angle emerged from the convergence of systems thinking and contrarian frameworks across multiple models. The debate revealed that while skeptical challenges about feasibility were valid, the core insight about removing human bottlenecks survived scrutiny.',
-      whyItMatters:
-        'This matters because it reframes the problem entirely. Instead of asking "how do we make better decisions?" it asks "which decisions can we eliminate?" This is actionable: identify decision points that could be automated away.',
+      ideaCount: ideas.length,
+      ideaTitles: ideas.map((i) => i.title),
     },
-    {
-      title: 'Incentive Architecture Over Process Design',
-      description:
-        'Process improvements fail when incentive structures remain misaligned. Rather than redesigning workflows, map the incentive landscape and realign it so desired behaviors become the path of least resistance.',
-      whyEmerged:
-        'Multiple frameworks independently identified incentive misalignment as the root cause. The behavioral economics and historical precedent domains both surfaced examples where process changes failed until incentives were addressed.',
-      whyItMatters:
-        'This challenges the common assumption that better processes lead to better outcomes. The actionable insight: before any process change, ask "what are people actually incentivized to do?"',
-    },
-    {
-      title: 'Deliberate Small-Scale Failure as Discovery Method',
-      description:
-        'Instead of designing for success, design many small experiments expected to fail. The failures reveal constraints and possibilities that successful implementations hide.',
-      whyEmerged:
-        'This contrarian angle survived the skeptic\'s challenge about practicality by pointing to historical examples where deliberate failure-seeking outperformed careful planning.',
-      whyItMatters:
-        'This inverts the typical approach. Instead of avoiding failure, instrumentalize it. The user can apply this immediately: what small experiment would be valuable even if it fails?',
-    },
-  ];
+    'Synthesis agent complete'
+  );
 
   const briefing: Briefing = {
     query,
     timestamp: new Date().toISOString(),
-    ideas: mockIdeas,
+    ideas,
     debateTranscript: debateEntries,
     domains,
     stats: {
@@ -91,7 +69,6 @@ export async function generateBriefing(config: SynthesizerConfig): Promise<Brief
     },
   };
 
-  console.log(`[synthesizer] Briefing complete with ${briefing.ideas.length} extracted ideas`);
   return briefing;
 }
 
