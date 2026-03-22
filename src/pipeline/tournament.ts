@@ -18,11 +18,18 @@ import type {
   DebateEntry,
 } from '../types';
 import { getTopMembers } from './clustering';
+import {
+  generateAdvocateArgument,
+  generateSkepticChallenges,
+  generateRebuttal,
+} from '../clients/anthropic';
+import { logger as baseLogger, type Logger } from '../utils/logger';
 
 interface TournamentConfig {
   query: string;
   clusters: Cluster[];
   responses: RawResponse[];
+  runLogger?: Logger;
 }
 
 interface TournamentResult {
@@ -36,26 +43,58 @@ interface TournamentResult {
  * @returns Complete debate transcript for all clusters
  */
 export async function runTournament(config: TournamentConfig): Promise<TournamentResult> {
-  const { query, clusters, responses } = config;
+  const { query, clusters, responses, runLogger } = config;
+  const log = runLogger || baseLogger;
 
-  console.log(`[tournament] Starting debate with ${clusters.length} clusters`);
+  log.info({ clusterCount: clusters.length }, 'Tournament starting');
 
   // Phase 3a: Run all advocates in parallel
-  const advocateArgs = await runAdvocates(query, clusters, responses);
-  console.log(`[tournament] ${advocateArgs.length} advocates completed`);
+  const advocateResults = await runAdvocates(query, clusters, responses, log);
+  const successfulAdvocates = advocateResults.filter((r) => r.success);
 
-  // Phase 3b: Run skeptic (single call, sees all advocates)
-  const challenges = await runSkeptic(query, advocateArgs);
-  console.log(`[tournament] Skeptic challenged all advocates`);
+  log.info(
+    {
+      total: clusters.length,
+      successful: successfulAdvocates.length,
+      failed: clusters.length - successfulAdvocates.length,
+    },
+    'Advocates complete'
+  );
+
+  if (successfulAdvocates.length === 0) {
+    throw new Error('All advocate calls failed - cannot continue tournament');
+  }
+
+  // Phase 3b: Run skeptic (single call, sees only successful advocates)
+  const advocateArgs = successfulAdvocates.map((r) => r.argument!);
+  const challenges = await runSkeptic(query, advocateArgs, log);
+
+  log.info({ challengeCount: challenges.length }, 'Skeptic complete');
 
   // Phase 3c: Run all rebuttals in parallel
-  const rebuttals = await runRebuttals(query, advocateArgs, challenges);
-  console.log(`[tournament] ${rebuttals.length} rebuttals completed`);
+  const rebuttals = await runRebuttals(query, advocateArgs, challenges, log);
+
+  log.info(
+    {
+      total: advocateArgs.length,
+      successful: rebuttals.filter((r) => r.success).length,
+    },
+    'Rebuttals complete'
+  );
 
   // Combine into debate entries
   const debateEntries = combineDebate(advocateArgs, challenges, rebuttals);
 
+  log.info({ entryCount: debateEntries.length }, 'Tournament complete');
+
   return { debateEntries };
+}
+
+interface AdvocateResult {
+  clusterId: number;
+  success: boolean;
+  argument?: AdvocateArgument;
+  error?: string;
 }
 
 /**
@@ -64,20 +103,46 @@ export async function runTournament(config: TournamentConfig): Promise<Tournamen
 async function runAdvocates(
   query: string,
   clusters: Cluster[],
-  responses: RawResponse[]
-): Promise<AdvocateArgument[]> {
-  // TODO: Phase 3 implementation
-  // - Use Anthropic Claude SDK
-  // - Run all advocates in parallel (Promise.all)
-  // - Apply Advocate prompt from PROMPTS.md
-  // - Include top 2-3 member responses per cluster
+  responses: RawResponse[],
+  log: Logger
+): Promise<AdvocateResult[]> {
+  const promises = clusters.map(async (cluster): Promise<AdvocateResult> => {
+    try {
+      const topMembers = getTopMembers(cluster, responses, 3);
+      const topMemberContents = topMembers.map((m) => m.content);
 
-  // Stub: Return mock advocate arguments
-  return clusters.map((cluster) => ({
-    clusterId: cluster.id,
-    clusterName: cluster.name,
-    argument: `[STUB] Advocate argument for "${cluster.name}".\n\nThis angle represents the most valuable response because it challenges conventional assumptions and provides actionable insight that ordinary prompting would miss. The convergence of multiple reasoning paths on this conclusion suggests genuine intellectual merit.`,
-  }));
+      const argumentText = await generateAdvocateArgument(
+        query,
+        cluster.name,
+        cluster.summary,
+        topMemberContents,
+        log
+      );
+
+      return {
+        clusterId: cluster.id,
+        success: true,
+        argument: {
+          clusterId: cluster.id,
+          clusterName: cluster.name,
+          argument: argumentText,
+        },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log.error(
+        { clusterId: cluster.id, clusterName: cluster.name, error: errorMessage },
+        'Advocate failed'
+      );
+      return {
+        clusterId: cluster.id,
+        success: false,
+        error: errorMessage,
+      };
+    }
+  });
+
+  return Promise.all(promises);
 }
 
 /**
@@ -85,19 +150,25 @@ async function runAdvocates(
  */
 async function runSkeptic(
   query: string,
-  advocateArgs: AdvocateArgument[]
+  advocateArgs: AdvocateArgument[],
+  log: Logger
 ): Promise<SkepticChallenge[]> {
-  // TODO: Phase 3 implementation
-  // - Use Anthropic Claude SDK
-  // - Apply Skeptic prompt from PROMPTS.md
-  // - Parse JSON response with challenges array
-
-  // Stub: Return mock challenges
-  return advocateArgs.map((arg) => ({
-    clusterId: arg.clusterId,
-    clusterName: arg.clusterName,
-    challenge: `[STUB] Challenge to "${arg.clusterName}".\n\nIs this actually novel, or could it emerge from a single well-crafted prompt? The claimed value appears rhetorical rather than concrete.`,
+  const advocateInputs = advocateArgs.map((a) => ({
+    clusterId: a.clusterId,
+    clusterName: a.clusterName,
+    argument: a.argument,
   }));
+
+  const challenges = await generateSkepticChallenges(query, advocateInputs, log);
+
+  return challenges;
+}
+
+interface RebuttalResult {
+  clusterId: number;
+  success: boolean;
+  rebuttal?: Rebuttal;
+  error?: string;
 }
 
 /**
@@ -106,22 +177,54 @@ async function runSkeptic(
 async function runRebuttals(
   query: string,
   advocateArgs: AdvocateArgument[],
-  challenges: SkepticChallenge[]
-): Promise<Rebuttal[]> {
-  // TODO: Phase 3 implementation
-  // - Use Anthropic Claude SDK
-  // - Run all rebuttals in parallel (Promise.all)
-  // - Apply Rebuttal prompt from PROMPTS.md
-
-  // Stub: Return mock rebuttals
-  return advocateArgs.map((arg) => {
+  challenges: SkepticChallenge[],
+  log: Logger
+): Promise<RebuttalResult[]> {
+  const promises = advocateArgs.map(async (arg): Promise<RebuttalResult> => {
     const challenge = challenges.find((c) => c.clusterId === arg.clusterId);
-    return {
-      clusterId: arg.clusterId,
-      clusterName: arg.clusterName,
-      rebuttal: `[STUB] Rebuttal for "${arg.clusterName}".\n\nThe skeptic's challenge rests on a false assumption. This angle could not emerge from single-model querying because it represents the convergence of multiple distinct reasoning paths - a phenomenon only visible through combinatorial synthesis.`,
-    };
+
+    if (!challenge) {
+      // No challenge for this cluster (shouldn't happen, but handle gracefully)
+      return {
+        clusterId: arg.clusterId,
+        success: false,
+        error: 'No skeptic challenge found for this cluster',
+      };
+    }
+
+    try {
+      const rebuttalText = await generateRebuttal(
+        query,
+        arg.clusterName,
+        arg.argument,
+        challenge.challenge,
+        log
+      );
+
+      return {
+        clusterId: arg.clusterId,
+        success: true,
+        rebuttal: {
+          clusterId: arg.clusterId,
+          clusterName: arg.clusterName,
+          rebuttal: rebuttalText,
+        },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log.error(
+        { clusterId: arg.clusterId, clusterName: arg.clusterName, error: errorMessage },
+        'Rebuttal failed'
+      );
+      return {
+        clusterId: arg.clusterId,
+        success: false,
+        error: errorMessage,
+      };
+    }
   });
+
+  return Promise.all(promises);
 }
 
 /**
@@ -130,18 +233,20 @@ async function runRebuttals(
 function combineDebate(
   advocateArgs: AdvocateArgument[],
   challenges: SkepticChallenge[],
-  rebuttals: Rebuttal[]
+  rebuttalResults: RebuttalResult[]
 ): DebateEntry[] {
   return advocateArgs.map((arg) => {
     const challenge = challenges.find((c) => c.clusterId === arg.clusterId);
-    const rebuttal = rebuttals.find((r) => r.clusterId === arg.clusterId);
+    const rebuttalResult = rebuttalResults.find((r) => r.clusterId === arg.clusterId);
 
     return {
       clusterId: arg.clusterId,
       clusterName: arg.clusterName,
       advocateArgument: arg.argument,
-      skepticChallenge: challenge?.challenge || '[No challenge]',
-      rebuttal: rebuttal?.rebuttal || '[No rebuttal]',
+      skepticChallenge: challenge?.challenge || '[No challenge generated]',
+      rebuttal: rebuttalResult?.success
+        ? rebuttalResult.rebuttal!.rebuttal
+        : `[Rebuttal failed: ${rebuttalResult?.error || 'Unknown error'}]`,
     };
   });
 }

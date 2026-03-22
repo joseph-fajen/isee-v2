@@ -97,7 +97,7 @@ export async function runPipeline(
   emit('clustering', 'started', 'Identifying intellectual angles...');
   const clusteringStart = Date.now();
 
-  const clusters = await clusterResponses(responses, query);
+  const clusters = await clusterResponses(responses, query, runLogger);
 
   stageDurations.clustering = Date.now() - clusteringStart;
   emit('clustering', 'completed', `Identified ${clusters.length} distinct angles`);
@@ -112,6 +112,7 @@ export async function runPipeline(
     query,
     clusters,
     responses,
+    runLogger,
   });
 
   stageDurations.tournament = Date.now() - tournamentStart;

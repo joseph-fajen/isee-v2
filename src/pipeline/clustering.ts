@@ -10,71 +10,53 @@
  */
 
 import type { RawResponse, AnonymizedResponse, Cluster } from '../types';
+import { clusterResponsesWithClaude } from '../clients/anthropic';
+import { logger as baseLogger, type Logger } from '../utils/logger';
 
 /**
  * Cluster responses by emergent intellectual angle.
  *
  * @param responses - Raw responses (metadata will be stripped)
  * @param query - Original query for context
+ * @param runLogger - Optional logger with run context
  * @returns Array of 5-7 clusters with argument-style names
  */
 export async function clusterResponses(
   responses: RawResponse[],
-  query: string
+  query: string,
+  runLogger?: Logger
 ): Promise<Cluster[]> {
+  const log = runLogger || baseLogger;
+
   // Strip metadata - clustering agent sees content only
   const anonymized = anonymizeResponses(responses);
 
-  console.log(`[clustering] Analyzing ${anonymized.length} responses for emergent angles`);
+  log.info({ responseCount: anonymized.length }, 'Clustering agent starting');
 
-  // TODO: Phase 3 implementation
-  // - Use Anthropic Claude SDK
-  // - Apply the Clustering Agent prompt from PROMPTS.md
-  // - Parse JSON response
-  // - Validate 5-7 clusters returned
-  // - Ensure all indices are assigned exactly once
+  const clusters = await clusterResponsesWithClaude(query, anonymized, log);
 
-  // Stub: Return mock clusters for pipeline testing
-  const mockClusters: Cluster[] = [
-    {
-      id: 1,
-      name: 'Automate the human decision layer out of existence',
-      summary:
-        'This angle argues that human judgment is the bottleneck. Rather than improving human processes, remove humans from the loop entirely through protocol-level automation.',
-      memberIndices: [0, 5, 12, 23, 34, 45],
-    },
-    {
-      id: 2,
-      name: 'The problem lives in incentive structures not processes',
-      summary:
-        'This angle claims that process redesign is futile without addressing underlying incentives. Fix the incentives and processes will self-organize.',
-      memberIndices: [1, 8, 15, 28, 41],
-    },
-    {
-      id: 3,
-      name: 'Small-scale experimentation beats top-down design every time',
-      summary:
-        'This angle rejects grand solutions in favor of rapid iteration. Let many small experiments compete rather than betting on one comprehensive approach.',
-      memberIndices: [2, 9, 19, 31, 48],
-    },
-    {
-      id: 4,
-      name: 'Historical patterns show this problem is fundamentally unsolvable',
-      summary:
-        'This angle draws on historical precedents to argue the problem has no permanent solution. The best strategy is mitigation and adaptation rather than resolution.',
-      memberIndices: [3, 11, 22, 37, 52],
-    },
-    {
-      id: 5,
-      name: 'Cross-domain synthesis reveals an unexpected third path',
-      summary:
-        'This angle combines insights from seemingly unrelated fields to propose a novel approach that existing domain experts would not naturally discover.',
-      memberIndices: [4, 7, 14, 26, 39, 55],
-    },
-  ];
+  // Validate all indices are assigned
+  const validation = validateClusterAssignments(clusters, responses.length);
+  if (!validation.valid) {
+    log.warn(
+      {
+        issues: validation.issues,
+        clusterCount: clusters.length,
+        responseCount: responses.length,
+      },
+      'Cluster assignment validation warnings'
+    );
+  }
 
-  console.log(`[clustering] Identified ${mockClusters.length} distinct intellectual angles`);
-  return mockClusters;
+  log.info(
+    {
+      clusterCount: clusters.length,
+      clusterNames: clusters.map((c) => c.name),
+    },
+    'Clustering agent complete'
+  );
+
+  return clusters;
 }
 
 /**
@@ -86,6 +68,38 @@ function anonymizeResponses(responses: RawResponse[]): AnonymizedResponse[] {
     index: r.index,
     content: r.content,
   }));
+}
+
+/**
+ * Validate that cluster assignments cover all responses exactly once.
+ */
+function validateClusterAssignments(
+  clusters: Cluster[],
+  totalResponses: number
+): { valid: boolean; issues: string[] } {
+  const issues: string[] = [];
+  const assignedIndices = new Set<number>();
+
+  for (const cluster of clusters) {
+    for (const idx of cluster.memberIndices) {
+      if (idx < 0 || idx >= totalResponses) {
+        issues.push(`Invalid index ${idx} in cluster "${cluster.name}" (valid range: 0-${totalResponses - 1})`);
+      } else if (assignedIndices.has(idx)) {
+        issues.push(`Duplicate assignment: index ${idx} appears in multiple clusters`);
+      } else {
+        assignedIndices.add(idx);
+      }
+    }
+  }
+
+  // Check for unassigned indices
+  for (let i = 0; i < totalResponses; i++) {
+    if (!assignedIndices.has(i)) {
+      issues.push(`Unassigned response: index ${i} not in any cluster`);
+    }
+  }
+
+  return { valid: issues.length === 0, issues };
 }
 
 /**
