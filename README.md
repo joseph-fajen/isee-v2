@@ -75,6 +75,45 @@ This is a fresh implementation. Current status:
 - [ ] Real LLM calls
 - [ ] Prompt tuning
 
+## Development Strategy: Option B → C
+
+This project follows a two-phase development strategy:
+
+### Option B: Direct Development (Current)
+Build ISEE v2 with Claude Code using the PRD and Architecture documents. Each build phase (see ARCHITECTURE.md) is a discrete milestone:
+
+1. **Phase 1** ✅ - Pipeline skeleton with stubs
+2. **Phase 2** - Synthesis Layer (OpenRouter client, parallel execution)
+3. **Phase 3** - Clustering + Tournament (prompt tuning required)
+4. **Phase 4** - Synthesis Agent + Briefing output
+5. **Phase 5** - Integration + tuning
+
+### Option C: Archon Integration (Post-MVP)
+After the core pipeline works, integrate with [Archon](https://github.com/dynamous-community/remote-coding-agent) — a workflow engine for AI coding agents.
+
+**Why Archon later, not now:**
+- The PRD and Architecture docs are sufficient for Claude Code to execute well
+- Adding workflow complexity before validating the core pipeline is premature
+- First milestone should be: working pipeline, minimal UI
+
+**What Archon enables post-MVP:**
+- **YAML-defined workflows** for running ISEE analyses deterministically
+- **Multi-interface access** — run ISEE from Slack, Telegram, or GitHub
+- **Isolated worktrees** — run multiple analyses in parallel
+- **Development workflows** — deterministic CI/CD for ISEE improvements
+
+**Example future workflow:**
+```yaml
+# .archon/workflows/isee-analyze.yaml
+name: isee-analyze
+steps:
+  - command: run-isee-pipeline
+  - command: save-briefing
+  - command: notify-user
+```
+
+See [Archon CLI docs](https://joseph-fajen.github.io/archon-cli-docs/) for workflow syntax.
+
 ## Documentation
 
 - [PRD.md](./PRD.md) - Product requirements and north star
