@@ -15,6 +15,7 @@ import { generateSynthesisMatrix } from './pipeline/synthesis';
 import { clusterResponses } from './pipeline/clustering';
 import { runTournament } from './pipeline/tournament';
 import { generateBriefing, renderBriefingMarkdown } from './pipeline/synthesizer';
+import { createRunLogger } from './utils/logger';
 
 export interface PipelineResult {
   briefing: Briefing;
@@ -34,6 +35,11 @@ export async function runPipeline(
 ): Promise<PipelineResult> {
   const { query, concurrencyLimit = 10, verbose = false } = config;
   const startTime = Date.now();
+
+  const runId = crypto.randomUUID();
+  const runLogger = createRunLogger(runId);
+
+  runLogger.info({ query: query.substring(0, 100) }, 'Pipeline starting');
 
   const stageDurations = {
     prep: 0,
@@ -64,7 +70,7 @@ export async function runPipeline(
   emit('prep', 'started', 'Generating knowledge domains...');
   const prepStart = Date.now();
 
-  const domains = await generateDomains(query);
+  const domains = await generateDomains(query, runLogger);
 
   stageDurations.prep = Date.now() - prepStart;
   emit('prep', 'completed', `Generated ${domains.length} domains`);
@@ -76,7 +82,7 @@ export async function runPipeline(
   const synthesisStart = Date.now();
 
   const responses = await generateSynthesisMatrix(
-    { query, domains, concurrencyLimit },
+    { query, domains, concurrencyLimit, runLogger },
     (current, total) => {
       emit('synthesis', 'progress', `${current}/${total} calls completed`, { current, total });
     }
@@ -135,6 +141,15 @@ export async function runPipeline(
   briefing.stats.stageDurations.synthesizer = Date.now() - synthesizerStart;
 
   emit('synthesizer', 'completed', `Briefing generated with ${briefing.ideas.length} ideas`);
+
+  runLogger.info(
+    {
+      runId,
+      totalDurationMs: Date.now() - startTime,
+      ideasGenerated: briefing.ideas.length,
+    },
+    'Pipeline complete'
+  );
 
   // Render markdown
   const markdown = renderBriefingMarkdown(briefing);

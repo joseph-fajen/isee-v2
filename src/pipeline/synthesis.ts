@@ -8,14 +8,23 @@
  * All calls run in parallel with concurrency limiting.
  */
 
+import pLimit from 'p-limit';
 import type { Domain, RawResponse, CognitiveFramework, SynthesisModel } from '../types';
-import { FRAMEWORKS } from '../config/frameworks';
+import { FRAMEWORKS, formatFrameworkPrompt } from '../config/frameworks';
 import { MODELS } from '../config/models';
+import { callOpenRouter } from '../clients/openrouter';
+import {
+  logger as baseLogger,
+  logStageStart,
+  logStageComplete,
+  type Logger,
+} from '../utils/logger';
 
 interface SynthesisConfig {
   query: string;
   domains: Domain[];
   concurrencyLimit?: number;
+  runLogger?: Logger;
 }
 
 /**
@@ -29,38 +38,92 @@ export async function generateSynthesisMatrix(
   config: SynthesisConfig,
   onProgress?: (current: number, total: number) => void
 ): Promise<RawResponse[]> {
-  const { query, domains, concurrencyLimit = 10 } = config;
+  const { query, domains, concurrencyLimit = 10, runLogger } = config;
+  const log = runLogger || baseLogger;
 
   // Build combination list
   const combinations = buildCombinations(domains);
   const total = combinations.length;
 
-  console.log(`[synthesis] Starting ${total} combinations (limit: ${concurrencyLimit} concurrent)`);
+  logStageStart(log, 'synthesis', {
+    totalCalls: total,
+    concurrencyLimit,
+    models: MODELS.map((m) => m.id),
+    frameworks: FRAMEWORKS.length,
+    domains: domains.map((d) => d.name),
+  });
 
-  // TODO: Phase 2 implementation
-  // - Create OpenRouter client
-  // - Implement parallel execution with p-limit or similar
-  // - Apply cognitive framework prompts
-  // - Collect responses with metadata
-  // - Handle individual call failures gracefully
+  const limit = pLimit(concurrencyLimit);
+  const startTime = Date.now();
 
-  // Stub: Return mock responses for pipeline testing
-  const responses: RawResponse[] = combinations.map((combo, index) => ({
-    index,
-    content: `[STUB] Response from ${combo.model.name} using ${combo.framework.name} through ${combo.domain.name} lens.\n\nThis is placeholder content that will be replaced with actual LLM responses in Phase 2.`,
-    model: combo.model.id,
-    framework: combo.framework.id,
-    domain: combo.domain.name,
-    responseTimeMs: Math.floor(Math.random() * 2000) + 500,
-  }));
+  // Track results
+  let completed = 0;
+  let failed = 0;
+  const responses: RawResponse[] = [];
+  const failures: Array<{ model: string; framework: string; domain: string; error: string }> = [];
 
-  // Simulate progress
-  for (let i = 0; i < responses.length; i++) {
-    onProgress?.(i + 1, total);
-    await new Promise((resolve) => setTimeout(resolve, 10)); // Tiny delay for demo
-  }
+  // Create all limited promises
+  const promises = combinations.map((combo, index) =>
+    limit(async () => {
+      const prompt = formatFrameworkPrompt(combo.framework, query, combo.domain.name);
 
-  console.log(`[synthesis] Completed ${responses.length} responses`);
+      try {
+        const result = await callOpenRouter({
+          model: combo.model.openRouterId,
+          prompt,
+          logger: log,
+          context: {
+            framework: combo.framework.id,
+            domain: combo.domain.name,
+            callIndex: index,
+          },
+        });
+
+        const response: RawResponse = {
+          index,
+          content: result.content,
+          model: combo.model.id,
+          framework: combo.framework.id,
+          domain: combo.domain.name,
+          tokens: result.tokens,
+          responseTimeMs: result.durationMs,
+        };
+
+        responses.push(response);
+      } catch (error) {
+        failed++;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        failures.push({
+          model: combo.model.id,
+          framework: combo.framework.id,
+          domain: combo.domain.name,
+          error: errorMessage,
+        });
+        // Don't throw - continue with remaining calls
+      } finally {
+        completed++;
+        onProgress?.(completed, total);
+      }
+    })
+  );
+
+  // Wait for all to complete
+  await Promise.all(promises);
+
+  const durationMs = Date.now() - startTime;
+
+  logStageComplete(log, 'synthesis', {
+    durationMs,
+    total,
+    successful: responses.length,
+    failed,
+    failures: failures.length > 0 ? failures : undefined,
+    avgCallDurationMs:
+      responses.length > 0
+        ? Math.round(responses.reduce((sum, r) => sum + (r.responseTimeMs || 0), 0) / responses.length)
+        : 0,
+  });
+
   return responses;
 }
 

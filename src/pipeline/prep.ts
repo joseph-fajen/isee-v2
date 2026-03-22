@@ -9,41 +9,30 @@
  */
 
 import type { Domain } from '../types';
+import { generateDomainsWithClaude } from '../clients/anthropic';
+import { logger as baseLogger, type Logger } from '../utils/logger';
 
 /**
  * Generate knowledge domains relevant to the given query.
  *
  * @param query - The user's research question
+ * @param runLogger - Optional logger with run context (creates default if not provided)
  * @returns Array of 3-5 dynamically generated domains
  */
-export async function generateDomains(query: string): Promise<Domain[]> {
-  // TODO: Phase 2 implementation
-  // - Use Anthropic Claude SDK
-  // - Apply the Prep Agent prompt from PROMPTS.md
-  // - Parse JSON response
-  // - Validate 3-5 domains returned
+export async function generateDomains(query: string, runLogger?: Logger): Promise<Domain[]> {
+  const log = runLogger || baseLogger;
 
-  console.log('[prep] Generating domains for query:', query.substring(0, 50) + '...');
+  log.info({ queryPreview: query.substring(0, 100) }, 'Prep agent starting domain generation');
 
-  // Stub: Return mock domains for pipeline testing
-  const mockDomains: Domain[] = [
-    {
-      name: 'Behavioral Economics',
-      description: 'Study of psychological factors influencing economic decisions',
-      focus: 'How cognitive biases and heuristics shape decision-making',
-    },
-    {
-      name: 'Systems Theory',
-      description: 'Analysis of complex interconnected systems and feedback loops',
-      focus: 'Emergent properties and unintended consequences',
-    },
-    {
-      name: 'Historical Precedents',
-      description: 'Examination of similar challenges and their outcomes in history',
-      focus: 'Patterns of success and failure across contexts',
-    },
-  ];
+  const domains = await generateDomainsWithClaude(query, log);
 
-  console.log(`[prep] Generated ${mockDomains.length} domains`);
-  return mockDomains;
+  log.info(
+    {
+      domainCount: domains.length,
+      domains: domains.map((d) => d.name),
+    },
+    'Prep agent generated domains'
+  );
+
+  return domains;
 }
