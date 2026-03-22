@@ -38,7 +38,7 @@ export async function generateSynthesisMatrix(
   config: SynthesisConfig,
   onProgress?: (current: number, total: number) => void
 ): Promise<RawResponse[]> {
-  const { query, domains, concurrencyLimit = 10, runLogger } = config;
+  const { query, domains, concurrencyLimit = 15, runLogger } = config;
   const log = runLogger || baseLogger;
 
   // Build combination list

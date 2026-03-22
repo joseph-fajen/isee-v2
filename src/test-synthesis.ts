@@ -30,7 +30,7 @@ async function testSynthesis() {
   console.log(`Expected calls: ${MODELS.length} models × 11 frameworks = ${MODELS.length * 11}`);
 
   const responses = await generateSynthesisMatrix(
-    { query, domains, concurrencyLimit: 5, runLogger },
+    { query, domains, concurrencyLimit: 15, runLogger },
     (current, total) => {
       process.stdout.write(`\rProgress: ${current}/${total}`);
     }

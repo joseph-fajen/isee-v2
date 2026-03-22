@@ -38,7 +38,8 @@ const DomainsResponseSchema = z.object({
 });
 
 // Model to use for pipeline agents
-const AGENT_MODEL = 'claude-sonnet-4-20250514';
+// Must be a model that supports structured outputs (claude-sonnet-4-5, claude-sonnet-4-6, etc.)
+const AGENT_MODEL = 'claude-sonnet-4-5';
 
 /**
  * Generate knowledge domains for a query using structured output.
