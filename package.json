@@ -1,0 +1,29 @@
+{
+  "name": "isee-v2",
+  "version": "2.0.0",
+  "description": "ISEE v2 - Idea Synthesis and Extraction Engine",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run src/server.ts",
+    "start": "bun run src/server.ts",
+    "pipeline": "bun run src/pipeline.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "format": "prettier --write src/"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "openai": "^4.70.0",
+    "marked": "^15.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.3.0"
+  },
+  "author": "Joseph Fajen",
+  "license": "MIT"
+}

@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ISEE v2 - Idea Synthesis and Extraction Engine</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #1a1a1a;
+      --bg-tertiary: #252525;
+      --text-primary: #f5f5f5;
+      --text-secondary: #a0a0a0;
+      --accent: #f59e0b;
+      --accent-dim: #b45309;
+      --border: #333;
+      --success: #22c55e;
+      --error: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 800px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    h1 span {
+      color: var(--accent);
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+    }
+
+    /* Input Section */
+    .input-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .input-section label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: var(--text-primary);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 1rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 1rem;
+      font-family: inherit;
+      resize: vertical;
+      margin-bottom: 1rem;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    textarea::placeholder {
+      color: var(--text-secondary);
+    }
+
+    button {
+      width: 100%;
+      padding: 1rem 2rem;
+      background: var(--accent);
+      color: var(--bg-primary);
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--accent-dim);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Progress Section */
+    .progress-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      display: none;
+    }
+
+    .progress-section.active {
+      display: block;
+    }
+
+    .progress-title {
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    .progress-stages {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .stage {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem;
+      border-radius: 6px;
+    }
+
+    .stage.pending { color: var(--text-secondary); }
+    .stage.active { color: var(--accent); background: rgba(245, 158, 11, 0.1); }
+    .stage.completed { color: var(--success); }
+    .stage.error { color: var(--error); }
+
+    .stage-icon {
+      width: 20px;
+      text-align: center;
+    }
+
+    /* Output Section */
+    .output-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      display: none;
+    }
+
+    .output-section.active {
+      display: block;
+    }
+
+    .briefing-content {
+      line-height: 1.7;
+    }
+
+    .briefing-content h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+
+    .briefing-content h2 {
+      font-size: 1.4rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+      color: var(--accent);
+    }
+
+    .briefing-content p {
+      margin-bottom: 1rem;
+    }
+
+    .briefing-content hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1.5rem 0;
+    }
+
+    .briefing-content details {
+      margin-top: 2rem;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .briefing-content summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .briefing-content details[open] summary {
+      margin-bottom: 1rem;
+    }
+
+    .error-message {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--error);
+      border-radius: 8px;
+      padding: 1rem;
+      color: var(--error);
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 2rem;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><span>ISEE</span> v2</h1>
+      <p class="subtitle">Idea Synthesis and Extraction Engine</p>
+    </header>
+
+    <!-- Input Section -->
+    <div class="input-section">
+      <label for="query">Enter your research question</label>
+      <textarea
+        id="query"
+        placeholder="How might we improve decision-making in complex organizations while preserving individual autonomy and avoiding bureaucratic paralysis?"
+      ></textarea>
+      <button id="analyze-btn" onclick="analyze()">Analyze with ISEE</button>
+    </div>
+
+    <!-- Progress Section -->
+    <div class="progress-section" id="progress-section">
+      <div class="progress-title">Analysis in Progress</div>
+      <div class="progress-stages">
+        <div class="stage" id="stage-prep">
+          <span class="stage-icon">○</span>
+          <span>Generating knowledge domains...</span>
+        </div>
+        <div class="stage" id="stage-synthesis">
+          <span class="stage-icon">○</span>
+          <span>Querying AI models (~60 calls)...</span>
+        </div>
+        <div class="stage" id="stage-clustering">
+          <span class="stage-icon">○</span>
+          <span>Identifying intellectual angles...</span>
+        </div>
+        <div class="stage" id="stage-tournament">
+          <span class="stage-icon">○</span>
+          <span>Running tournament debate...</span>
+        </div>
+        <div class="stage" id="stage-synthesizer">
+          <span class="stage-icon">○</span>
+          <span>Generating final briefing...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Output Section -->
+    <div class="output-section" id="output-section">
+      <div class="briefing-content" id="briefing-content"></div>
+    </div>
+
+    <footer>
+      <p>ISEE v2 &mdash; <a href="PRD.md">Read the PRD</a></p>
+    </footer>
+  </div>
+
+  <script>
+    const stages = ['prep', 'synthesis', 'clustering', 'tournament', 'synthesizer'];
+
+    function setStageStatus(stageId, status) {
+      const el = document.getElementById(`stage-${stageId}`);
+      if (!el) return;
+
+      // Remove all status classes
+      el.classList.remove('pending', 'active', 'completed', 'error');
+      el.classList.add(status);
+
+      // Update icon
+      const icon = el.querySelector('.stage-icon');
+      switch (status) {
+        case 'active':
+          icon.textContent = '●';
+          break;
+        case 'completed':
+          icon.textContent = '✓';
+          break;
+        case 'error':
+          icon.textContent = '✗';
+          break;
+        default:
+          icon.textContent = '○';
+      }
+    }
+
+    async function analyze() {
+      const query = document.getElementById('query').value.trim();
+      if (!query) {
+        alert('Please enter a research question');
+        return;
+      }
+
+      // Reset UI
+      const btn = document.getElementById('analyze-btn');
+      const progressSection = document.getElementById('progress-section');
+      const outputSection = document.getElementById('output-section');
+
+      btn.disabled = true;
+      btn.textContent = 'Analyzing...';
+      progressSection.classList.add('active');
+      outputSection.classList.remove('active');
+
+      // Reset all stages
+      stages.forEach(s => setStageStatus(s, 'pending'));
+
+      try {
+        // Simulate stage progression (in real implementation, use SSE or polling)
+        for (const stage of stages) {
+          setStageStatus(stage, 'active');
+          await new Promise(r => setTimeout(r, 500)); // Brief delay for visual feedback
+        }
+
+        // Make actual API call
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error || 'Analysis failed');
+        }
+
+        // Mark all stages complete
+        stages.forEach(s => setStageStatus(s, 'completed'));
+
+        // Render the briefing
+        const briefingContent = document.getElementById('briefing-content');
+        briefingContent.innerHTML = marked.parse(result.data.markdown);
+        outputSection.classList.add('active');
+
+      } catch (error) {
+        console.error('Analysis error:', error);
+        stages.forEach(s => {
+          const el = document.getElementById(`stage-${s}`);
+          if (el.classList.contains('active')) {
+            setStageStatus(s, 'error');
+          }
+        });
+
+        const briefingContent = document.getElementById('briefing-content');
+        briefingContent.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+        outputSection.classList.add('active');
+
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Analyze with ISEE';
+      }
+    }
+  </script>
+</body>
+</html>
