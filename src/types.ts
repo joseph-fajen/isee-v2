@@ -143,8 +143,10 @@ export interface ExtractedIdea {
  * The final briefing document produced by ISEE.
  */
 export interface Briefing {
-  /** The original user query */
+  /** The query used for analysis (original or refined) */
   query: string;
+  /** Refinement metadata — shows if/how the query was improved */
+  refinement?: RefinementMetadata;
   /** ISO timestamp of when the analysis completed */
   timestamp: string;
   /** The 3 extracted ideas */
@@ -155,6 +157,54 @@ export interface Briefing {
   domains: Domain[];
   /** Statistics about the run */
   stats: RunStats;
+}
+
+// ============================================================================
+// Query Refinement Types
+// ============================================================================
+
+/**
+ * Result of assessing query quality against the 4 criteria.
+ */
+export interface QueryAssessment {
+  /** Whether the query is sufficient to proceed */
+  sufficient: boolean;
+  /** Which criteria are missing (if any) */
+  missingCriteria: Array<'decision' | 'constraints' | 'perspective' | 'openness'>;
+  /** Brief explanation of the assessment */
+  reasoning: string;
+}
+
+/**
+ * A follow-up question generated for the user.
+ */
+export interface RefinementQuestion {
+  /** Which missing criterion this question targets */
+  targetsCriterion: 'decision' | 'constraints' | 'perspective' | 'openness';
+  /** The question to ask the user */
+  question: string;
+}
+
+/**
+ * User's answer to a refinement question.
+ */
+export interface RefinementAnswer {
+  question: string;
+  answer: string;
+}
+
+/**
+ * Complete refinement metadata for the briefing.
+ */
+export interface RefinementMetadata {
+  /** The original query as entered by the user */
+  originalQuery: string;
+  /** Whether refinement was triggered */
+  wasRefined: boolean;
+  /** Follow-up Q&A if refinement occurred */
+  answers?: RefinementAnswer[];
+  /** The refined query (if refinement occurred) */
+  refinedQuery?: string;
 }
 
 // ============================================================================
@@ -189,6 +239,8 @@ export interface RunStats {
 export interface PipelineConfig {
   /** The user's query */
   query: string;
+  /** Refinement metadata to include in the briefing */
+  refinement?: RefinementMetadata;
   /** Number of models to use (default: 6) */
   modelCount?: number;
   /** Maximum concurrent API calls (default: 10) */
@@ -285,7 +337,7 @@ export interface AnalyzeStartResponse {
  */
 export interface ProgressEvent {
   /** Pipeline stage */
-  stage: 'prep' | 'synthesis' | 'clustering' | 'tournament' | 'synthesizer';
+  stage: 'refinement' | 'prep' | 'synthesis' | 'clustering' | 'tournament' | 'synthesizer';
   /** Event status */
   status: 'started' | 'progress' | 'completed' | 'error';
   /** Human-readable message */

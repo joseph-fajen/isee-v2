@@ -8,8 +8,9 @@
  */
 
 import { runPipeline } from './pipeline';
-import type { AnalyzeRequest, ApiResponse, Briefing, ProgressEvent } from './types';
+import type { AnalyzeRequest, ApiResponse, Briefing, ProgressEvent, RefinementMetadata } from './types';
 import { renderBriefingMarkdown } from './pipeline/synthesizer';
+import { assessQuery, getFollowUpQuestions, rewriteUserQuery } from './pipeline/refinement';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || 'localhost';
@@ -43,6 +44,14 @@ async function handleRequest(req: Request): Promise<Response> {
       return new Response('Missing query parameter', { status: 400 });
     }
 
+    const refinementParam = url.searchParams.get('refinement');
+    let refinementMeta: RefinementMetadata | undefined;
+    if (refinementParam) {
+      try {
+        refinementMeta = JSON.parse(decodeURIComponent(refinementParam));
+      } catch { /* ignore parse errors */ }
+    }
+
     console.log(`[server] Starting SSE stream for query: ${query.substring(0, 50)}...`);
 
     const encoder = new TextEncoder();
@@ -64,7 +73,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
         try {
           const result = await runPipeline(
-            { query, verbose: false },
+            { query, verbose: false, refinement: refinementMeta },
             (progress) => {
               // The progress callback now receives rich ProgressEvent
               sendProgress(progress as ProgressEvent);
@@ -142,6 +151,68 @@ async function handleRequest(req: Request): Promise<Response> {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error',
         } as ApiResponse<never>,
+        { status: 500 }
+      );
+    }
+  }
+
+  // API: Assess query quality
+  if (method === 'POST' && path === '/api/refine/assess') {
+    try {
+      const body = await req.json() as { query: string };
+      if (!body.query || typeof body.query !== 'string') {
+        return Response.json({ success: false, error: 'Missing or invalid query' }, { status: 400 });
+      }
+
+      const assessment = await assessQuery(body.query);
+
+      if (assessment.sufficient) {
+        return Response.json({ success: true, data: { sufficient: true } });
+      }
+
+      // Query needs refinement — generate follow-up questions
+      const questions = await getFollowUpQuestions(body.query, assessment.missingCriteria);
+
+      return Response.json({
+        success: true,
+        data: {
+          sufficient: false,
+          missingCriteria: assessment.missingCriteria,
+          reasoning: assessment.reasoning,
+          questions,
+        },
+      });
+    } catch (error) {
+      console.error('[server] Assessment error:', error);
+      return Response.json(
+        { success: false, error: error instanceof Error ? error.message : 'Assessment failed' },
+        { status: 500 }
+      );
+    }
+  }
+
+  // API: Rewrite query with user's answers
+  if (method === 'POST' && path === '/api/refine/rewrite') {
+    try {
+      const body = await req.json() as {
+        originalQuery: string;
+        answers: Array<{ question: string; answer: string }>;
+      };
+
+      if (!body.originalQuery || !body.answers?.length) {
+        return Response.json({ success: false, error: 'Missing query or answers' }, { status: 400 });
+      }
+
+      const refinedQuery = await rewriteUserQuery(body.originalQuery, body.answers);
+
+      return Response.json({
+        success: true,
+        data: { refinedQuery },
+      });
+    } catch (error) {
+      console.error('[server] Rewrite error:', error);
+      return Response.json(
+        { success: false, error: error instanceof Error ? error.message : 'Rewrite failed' },
         { status: 500 }
       );
     }

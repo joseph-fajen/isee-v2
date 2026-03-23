@@ -33,7 +33,7 @@ export type Logger = pino.Logger;
  * Log context for LLM calls.
  */
 export interface LLMCallContext {
-  stage: 'prep' | 'synthesis' | 'clustering' | 'advocate' | 'skeptic' | 'rebuttal' | 'synthesizer';
+  stage: 'refinement' | 'prep' | 'synthesis' | 'clustering' | 'advocate' | 'skeptic' | 'rebuttal' | 'synthesizer';
   model?: string;
   framework?: string;
   domain?: string;

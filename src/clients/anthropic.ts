@@ -18,6 +18,9 @@ import {
   buildSkepticPrompt,
   buildRebuttalPrompt,
   buildSynthesisPrompt,
+  buildAssessmentPrompt,
+  buildQuestionGeneratorPrompt,
+  buildRewriterPrompt,
 } from '../config/prompts';
 
 // Lazy initialization
@@ -78,6 +81,20 @@ const ExtractedIdeaSchema = z.object({
 
 const BriefingResponseSchema = z.object({
   ideas: z.array(ExtractedIdeaSchema),
+});
+
+// Query Refinement schemas
+const QueryAssessmentSchema = z.object({
+  sufficient: z.boolean(),
+  missingCriteria: z.array(z.enum(['decision', 'constraints', 'perspective', 'openness'])),
+  reasoning: z.string(),
+});
+
+const RefinementQuestionsSchema = z.object({
+  questions: z.array(z.object({
+    targetsCriterion: z.enum(['decision', 'constraints', 'perspective', 'openness']),
+    question: z.string(),
+  })),
 });
 
 // Model to use for pipeline agents
@@ -384,6 +401,126 @@ export async function generateRebuttal(
     }
   }
 
+  throw new Error('Unexpected: retry loop completed without result');
+}
+
+/**
+ * Assess query quality against the 4 criteria (structured output).
+ */
+export async function assessQueryQuality(
+  query: string,
+  logger: Logger
+): Promise<{ sufficient: boolean; missingCriteria: string[]; reasoning: string }> {
+  const maxAttempts = 2;
+  const prompt = buildAssessmentPrompt({ query });
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const callContext = { stage: 'refinement' as const, model: AGENT_MODEL, attempt };
+    logLLMCallStart(logger, callContext);
+    const startTime = Date.now();
+
+    try {
+      const response = await getClient().messages.parse({
+        model: AGENT_MODEL,
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }],
+        output_config: { format: zodOutputFormat(QueryAssessmentSchema) },
+      });
+
+      const durationMs = Date.now() - startTime;
+      if (!response.parsed_output) throw new Error('Assessment returned no structured output');
+
+      logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
+      return response.parsed_output;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const willRetry = attempt < maxAttempts;
+      logLLMCallError(logger, callContext, errorMessage, willRetry);
+      if (!willRetry) throw new Error(`Query assessment failed after ${maxAttempts} attempts: ${errorMessage}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  throw new Error('Unexpected: retry loop completed without result');
+}
+
+/**
+ * Generate follow-up questions for missing criteria (structured output).
+ */
+export async function generateRefinementQuestions(
+  query: string,
+  missingCriteria: string[],
+  logger: Logger
+): Promise<Array<{ targetsCriterion: string; question: string }>> {
+  const maxAttempts = 2;
+  const prompt = buildQuestionGeneratorPrompt({ query, missingCriteria });
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const callContext = { stage: 'refinement' as const, model: AGENT_MODEL, attempt };
+    logLLMCallStart(logger, callContext);
+    const startTime = Date.now();
+
+    try {
+      const response = await getClient().messages.parse({
+        model: AGENT_MODEL,
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }],
+        output_config: { format: zodOutputFormat(RefinementQuestionsSchema) },
+      });
+
+      const durationMs = Date.now() - startTime;
+      if (!response.parsed_output) throw new Error('Question generator returned no structured output');
+
+      logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
+      return response.parsed_output.questions;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const willRetry = attempt < maxAttempts;
+      logLLMCallError(logger, callContext, errorMessage, willRetry);
+      if (!willRetry) throw new Error(`Question generation failed after ${maxAttempts} attempts: ${errorMessage}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  throw new Error('Unexpected: retry loop completed without result');
+}
+
+/**
+ * Rewrite query using original + user answers (prose output).
+ */
+export async function rewriteQuery(
+  originalQuery: string,
+  answers: Array<{ question: string; answer: string }>,
+  logger: Logger
+): Promise<string> {
+  const maxAttempts = 2;
+  const prompt = buildRewriterPrompt({ originalQuery, answers });
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const callContext = { stage: 'refinement' as const, model: AGENT_MODEL, attempt };
+    logLLMCallStart(logger, callContext);
+    const startTime = Date.now();
+
+    try {
+      const response = await getClient().messages.create({
+        model: AGENT_MODEL,
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const durationMs = Date.now() - startTime;
+      const textBlock = response.content[0];
+      const text = textBlock.type === 'text' ? textBlock.text : '';
+      if (!text) throw new Error('Rewriter returned empty response');
+
+      logLLMCallSuccess(logger, callContext, durationMs, text.length);
+      return text.trim();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const willRetry = attempt < maxAttempts;
+      logLLMCallError(logger, callContext, errorMessage, willRetry);
+      if (!willRetry) throw new Error(`Query rewrite failed after ${maxAttempts} attempts: ${errorMessage}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
   throw new Error('Unexpected: retry loop completed without result');
 }
 

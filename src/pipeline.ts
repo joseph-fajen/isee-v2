@@ -207,6 +207,11 @@ export async function runPipeline(
     },
   });
 
+  // Attach refinement metadata if present
+  if (config.refinement) {
+    briefing.refinement = config.refinement;
+  }
+
   // Update final stats
   briefing.stats.totalDurationMs = Date.now() - startTime;
   briefing.stats.stageDurations.synthesizer = Date.now() - synthesizerStart;
