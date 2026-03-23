@@ -12,17 +12,13 @@ ISEE (Idea Synthesis and Extraction Engine) is a thinking amplifier that:
 
 ## Core Design Principles
 
-1. **ISEE does the work.** The user enters a query and receives 3 extracted ideas. All intellectual labor between those two moments belongs to ISEE.
-
-2. **Confidence through visible reasoning.** The user trusts the 3 ideas not because of a score, but because they can see that ideas competed, were challenged, and survived scrutiny.
-
-3. **Present, don't prescribe.** The final output is a briefing, not a verdict. ISEE hands the user something valuable and explains why it's worth their attention.
-
-4. **Simplicity is a feature.** The UI has two states: input form and briefing output. No scoring UIs, no file browsers, no annotation systems.
-
-5. **Emergent over structural.** Clustering discovers genuine intellectual angles, not categories based on source dimensions (model, framework, domain).
+See [PRD.md](./PRD.md#design-principles) for the 5 core design principles. Key principles to keep in mind while coding:
+- **ISEE does the work** — no user-facing evaluation UI
+- **Emergent over structural** — clustering discovers angles, doesn't impose categories
 
 ## Architecture Overview
+
+> Full design details in [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 ```
 [Query Input]
@@ -42,12 +38,11 @@ ISEE (Idea Synthesis and Extraction Engine) is a thinking amplifier that:
 
 ## Tech Stack
 
-- **Runtime**: Bun (TypeScript)
-- **LLM Providers**:
-  - OpenRouter (Synthesis Layer - 6 heterogeneous models)
-  - Anthropic Claude SDK (Pipeline agents - Clustering, Advocates, Skeptic, Synthesis)
-- **Frontend**: Single HTML file with embedded CSS/JS, rendered with marked.js
-- **Storage**: JSON files only - each run produces `isee-briefing-[timestamp].md`
+> Full stack details in [ARCHITECTURE.md](./ARCHITECTURE.md)
+
+Key details for implementation:
+- **OpenRouter**: Used for Synthesis Layer (6 heterogeneous models)
+- **Anthropic Claude SDK**: Used for pipeline agents (Clustering, Advocates, Skeptic, Synthesis)
 
 ## Key Files
 
@@ -121,30 +116,14 @@ Individual LLM failures should not crash the pipeline:
 
 ## Build Phases
 
-Reference `ARCHITECTURE.md` for detailed build phases:
-
-1. **Phase 1**: Pipeline skeleton (stubs, types, orchestrator)
-2. **Phase 2**: Synthesis Layer (OpenRouter client, parallel execution)
-3. **Phase 3**: Clustering + Tournament (prompt tuning required)
-4. **Phase 4**: Synthesis Agent + Briefing output
-5. **Phase 5**: Integration + tuning
+Reference [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed build phases.
 
 ## Reference Documents
 
-- `PRD.md` - Full product requirements and success criteria
-- `ARCHITECTURE.md` - Detailed stage-by-stage design and data contracts
-- `PROMPTS.md` - All pipeline prompts with design rationale
+- [PRD.md](./PRD.md) - Product requirements, design principles, success criteria
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - Stage-by-stage design, data contracts, project structure
+- [PROMPTS.md](./PROMPTS.md) - All pipeline prompts with design rationale
 
 ## What NOT to Build
 
-Per the PRD, these are explicitly out of scope:
-- Scoring sliders or rubrics
-- Response browsers or file explorers
-- Annotation or note-taking systems
-- Model/framework/domain configuration UI
-- Run history management
-- Performance analytics database
-- Cost estimation UI
-- Multi-user or deployment infrastructure
-
-Keep it simple. The UI has one job: take a query, show a briefing.
+See [PRD.md](./PRD.md#out-of-scope-for-v2) for the complete scope exclusion list. In short: no scoring UIs, no file browsers, no annotation systems, no configuration UI.
