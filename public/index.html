@@ -624,9 +624,9 @@
     </div>
 
     <!-- About Modal -->
-    <div class="modal-overlay" id="about-modal">
+    <div class="modal-overlay" id="about-modal" role="dialog" aria-modal="true" aria-labelledby="about-title">
       <div class="modal-box">
-        <button class="modal-close" id="about-close">&times;</button>
+        <button class="modal-close" id="about-close" aria-label="Close">&times;</button>
         <div class="modal-body" id="about-content"></div>
       </div>
     </div>
@@ -1030,19 +1030,28 @@
       function openAbout(e) {
         e.preventDefault();
         fetch('/about')
-          .then(res => res.text())
+          .then(res => {
+            if (!res.ok) throw new Error('Failed to load');
+            return res.text();
+          })
           .then(md => {
             content.innerHTML = marked.parse(md);
             overlay.classList.add('visible');
+            document.body.style.overflow = 'hidden';
+            closeBtn.focus();
           })
           .catch(() => {
             content.innerHTML = '<p>Could not load about content.</p>';
             overlay.classList.add('visible');
+            document.body.style.overflow = 'hidden';
+            closeBtn.focus();
           });
       }
 
       function closeAbout() {
         overlay.classList.remove('visible');
+        document.body.style.overflow = '';
+        link.focus();
       }
 
       link.addEventListener('click', openAbout);
