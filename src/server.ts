@@ -162,6 +162,8 @@ Bun.serve({
   port: PORT,
   hostname: HOST,
   fetch: handleRequest,
+  // SSE connections need longer timeout for 2-3 minute pipeline runs
+  idleTimeout: 255, // Max allowed (4+ minutes)
 });
 
 console.log(`Server running at http://${HOST}:${PORT}`);
