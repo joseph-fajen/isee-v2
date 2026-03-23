@@ -15,6 +15,33 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || 'localhost';
 
 /**
+ * Filter OVERVIEW.md to include only user-facing sections.
+ * Strips developer-focused sections: Quick Start, For Developers, Further Reading.
+ */
+function filterOverviewForUsers(markdown: string): string {
+  const lines = markdown.split('\n');
+  const result: string[] = [];
+  let skip = false;
+
+  const excludedSections = ['quick start', 'for developers', 'further reading'];
+
+  for (const line of lines) {
+    // Check if this is a heading (## level)
+    const headingMatch = line.match(/^## (.+)/);
+    if (headingMatch) {
+      const title = headingMatch[1].trim().toLowerCase();
+      skip = excludedSections.includes(title);
+    }
+
+    if (!skip) {
+      result.push(line);
+    }
+  }
+
+  return result.join('\n').trim();
+}
+
+/**
  * Simple router for the ISEE API.
  */
 async function handleRequest(req: Request): Promise<Response> {
@@ -33,6 +60,19 @@ async function handleRequest(req: Request): Promise<Response> {
   // Health check
   if (method === 'GET' && path === '/health') {
     return Response.json({ status: 'ok', timestamp: new Date().toISOString() });
+  }
+
+  // Serve filtered OVERVIEW.md for About modal
+  if (method === 'GET' && path === '/about') {
+    try {
+      const content = await Bun.file('OVERVIEW.md').text();
+      const filtered = filterOverviewForUsers(content);
+      return new Response(filtered, {
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    } catch {
+      return new Response('About content not available', { status: 500 });
+    }
   }
 
   // SSE: Stream analysis progress
