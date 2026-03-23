@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "bun run src/server.ts",
+    "dev": "bun --watch run src/server.ts",
     "start": "bun run src/server.ts",
     "pipeline": "bun run src/pipeline.ts",
     "test": "bun test",
