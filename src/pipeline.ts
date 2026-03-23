@@ -7,6 +7,7 @@
  * Stage 2: Clustering Agent (emergent clustering)
  * Stage 3: Tournament Layer (advocates, skeptic, rebuttals)
  * Stage 4: Synthesis Agent (briefing generation)
+ * Stage 5: Translation Agent (plain-language briefing)
  */
 
 import type { PipelineConfig, ProgressEvent, Briefing, TranslatedBriefing, RunStats } from './types';
@@ -225,21 +226,40 @@ export async function runPipeline(
   emit('translation', 'started', 'Translating briefing to plain language...');
   const translationStart = Date.now();
 
-  const translatedBriefing = await translateBriefing({
-    briefing,
-    runLogger,
-    onTranslationReady: (ideas) => {
-      emit('translation', 'progress', `Translated ${ideas.length} ideas`, {
-        detail: {
-          type: 'translated',
-          ideas: ideas.map((idea) => ({
-            title: idea.title,
-            actionItemCount: idea.actionItems.length,
-          })),
-        },
-      });
-    },
-  });
+  let translatedBriefing: TranslatedBriefing;
+  try {
+    translatedBriefing = await translateBriefing({
+      briefing,
+      runLogger,
+      onTranslationReady: (ideas) => {
+        emit('translation', 'progress', `Translated ${ideas.length} ideas`, {
+          detail: {
+            type: 'translated',
+            ideas: ideas.map((idea) => ({
+              title: idea.title,
+              actionItemCount: idea.actionItems.length,
+            })),
+          },
+        });
+      },
+    });
+  } catch (error) {
+    runLogger.warn(
+      { error: error instanceof Error ? error.message : 'Unknown' },
+      'Translation agent failed, using raw briefing as fallback'
+    );
+    emit('translation', 'error', 'Translation failed, showing original analysis');
+    translatedBriefing = {
+      queryPlainLanguage: briefing.query,
+      ideas: briefing.ideas.map((idea) => ({
+        title: idea.title,
+        explanation: idea.description,
+        whyForYou: idea.whyItMatters,
+        actionItems: [],
+      })),
+      originalBriefing: briefing,
+    };
+  }
 
   stageDurations.translation = Date.now() - translationStart;
   emit('translation', 'completed', `Translation complete`);

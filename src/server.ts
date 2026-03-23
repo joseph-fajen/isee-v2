@@ -9,7 +9,6 @@
 
 import { runPipeline } from './pipeline';
 import type { AnalyzeRequest, ApiResponse, Briefing, TranslatedBriefing, ProgressEvent, RefinementMetadata } from './types';
-import { renderBriefingMarkdown } from './pipeline/synthesizer';
 import { assessQuery, getFollowUpQuestions, rewriteUserQuery } from './pipeline/refinement';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
