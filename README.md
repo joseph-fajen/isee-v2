@@ -23,16 +23,16 @@ bun run dev
 bun run pipeline "Your research question here"
 ```
 
-## Development Status
+## Status
 
-- [x] Repository scaffold
-- [x] Type definitions
-- [x] Pipeline stubs with mock data
-- [x] Basic UI
-- [ ] OpenRouter client integration
-- [ ] Anthropic SDK integration
-- [ ] Real LLM calls
-- [ ] Prompt tuning
+ISEE v2 is fully functional. Features include:
+
+- Smart query refinement with follow-up questions
+- Multi-model synthesis (6 models × 11 frameworks × dynamic domains)
+- Emergent clustering by intellectual angle
+- Advocate/Skeptic/Rebuttal tournament
+- Plain-language briefings with action items
+- Full analysis with debate transcripts
 
 ## Documentation
 
