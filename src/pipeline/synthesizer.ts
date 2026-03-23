@@ -13,7 +13,7 @@
  * where real debate transcripts can be used for testing and tuning.
  */
 
-import type { Domain, DebateEntry, ExtractedIdea, Briefing, RunStats } from '../types';
+import type { Domain, DebateEntry, ExtractedIdea, Briefing, RunStats, TranslatedBriefing } from '../types';
 import { generateBriefingWithClaude } from '../clients/anthropic';
 import { logger as baseLogger, type Logger } from '../utils/logger';
 
@@ -69,6 +69,7 @@ export async function generateBriefing(config: SynthesizerConfig): Promise<Brief
         clustering: 0,
         tournament: 0,
         synthesizer: 0,
+        translation: 0,
       },
     },
   };
@@ -77,14 +78,16 @@ export async function generateBriefing(config: SynthesizerConfig): Promise<Brief
 }
 
 /**
- * Render the briefing as Markdown.
+ * Render the translated briefing as Markdown.
+ * Shows plain-language version first, with full analysis in expandable section.
  */
-export function renderBriefingMarkdown(briefing: Briefing): string {
+export function renderBriefingMarkdown(translated: TranslatedBriefing): string {
+  const briefing = translated.originalBriefing;
   const lines: string[] = [];
 
-  lines.push(`# ISEE Briefing`);
+  lines.push(`# Your ISEE Briefing`);
   lines.push('');
-  lines.push(`**Query**: ${briefing.query}`);
+  lines.push(`**Your question:** ${translated.queryPlainLanguage}`);
 
   // Show refinement info if query was refined
   if (briefing.refinement?.wasRefined) {
@@ -92,17 +95,40 @@ export function renderBriefingMarkdown(briefing: Briefing): string {
     lines.push(`> *Original query*: "${briefing.refinement.originalQuery}"`);
     lines.push('>');
     lines.push('> *ISEE refined this query based on your additional context.*');
-    lines.push('');
   }
 
-  lines.push(`**Generated**: ${new Date(briefing.timestamp).toLocaleString()}`);
   lines.push('');
   lines.push('---');
   lines.push('');
 
-  // Render each idea
+  // Render each translated idea
+  lines.push('## 3 Ideas Worth Considering');
+  lines.push('');
+
+  translated.ideas.forEach((idea, index) => {
+    lines.push(`### ${index + 1}. ${idea.title}`);
+    lines.push('');
+    lines.push(idea.explanation);
+    lines.push('');
+    lines.push(`**Why this might work for you:** ${idea.whyForYou}`);
+    lines.push('');
+    lines.push('**Try this:**');
+    idea.actionItems.forEach((item, i) => {
+      lines.push(`${i + 1}. ${item}`);
+    });
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  });
+
+  // Full analysis in expandable section
+  lines.push('<details>');
+  lines.push('<summary>See full analysis</summary>');
+  lines.push('');
+
+  // Original ideas with full depth
   briefing.ideas.forEach((idea, index) => {
-    lines.push(`## Idea ${index + 1}: ${idea.title}`);
+    lines.push(`#### Idea ${index + 1}: ${idea.title}`);
     lines.push('');
     lines.push(idea.description);
     lines.push('');
@@ -114,13 +140,12 @@ export function renderBriefingMarkdown(briefing: Briefing): string {
     lines.push('');
   });
 
-  // Expandable debate transcript
-  lines.push('<details>');
-  lines.push('<summary>Show full debate transcript</summary>');
+  // Debate transcript
+  lines.push('#### Full Debate Transcript');
   lines.push('');
 
   briefing.debateTranscript.forEach((entry) => {
-    lines.push(`### ${entry.clusterName}`);
+    lines.push(`##### ${entry.clusterName}`);
     lines.push('');
     lines.push('**Advocate Argument:**');
     lines.push(entry.advocateArgument);

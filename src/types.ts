@@ -160,6 +160,36 @@ export interface Briefing {
 }
 
 // ============================================================================
+// Stage 5: Translation Agent Output
+// ============================================================================
+
+/**
+ * A simplified version of an extracted idea for plain-language presentation.
+ */
+export interface SimplifiedIdea {
+  /** Plain-language title */
+  title: string;
+  /** 2-3 sentence accessible explanation */
+  explanation: string;
+  /** Personal connection to user's constraints */
+  whyForYou: string;
+  /** 2-3 concrete action steps */
+  actionItems: string[];
+}
+
+/**
+ * The translated briefing combining plain-language output with original analysis.
+ */
+export interface TranslatedBriefing {
+  /** Conversational version of the refined query */
+  queryPlainLanguage: string;
+  /** Simplified versions of the 3 ideas */
+  ideas: SimplifiedIdea[];
+  /** Full Stage 4 output preserved exactly */
+  originalBriefing: Briefing;
+}
+
+// ============================================================================
 // Query Refinement Types
 // ============================================================================
 
@@ -230,6 +260,7 @@ export interface RunStats {
     clustering: number;
     tournament: number;
     synthesizer: number;
+    translation: number;
   };
 }
 
@@ -253,7 +284,7 @@ export interface PipelineConfig {
  * Progress update emitted during pipeline execution.
  */
 export interface PipelineProgress {
-  stage: 'refinement' | 'prep' | 'synthesis' | 'clustering' | 'tournament' | 'synthesizer';
+  stage: 'refinement' | 'prep' | 'synthesis' | 'clustering' | 'tournament' | 'synthesizer' | 'translation';
   status: 'started' | 'progress' | 'completed' | 'error';
   message: string;
   /** For synthesis stage: current/total calls */
@@ -337,7 +368,7 @@ export interface AnalyzeStartResponse {
  */
 export interface ProgressEvent {
   /** Pipeline stage */
-  stage: 'refinement' | 'prep' | 'synthesis' | 'clustering' | 'tournament' | 'synthesizer';
+  stage: 'refinement' | 'prep' | 'synthesis' | 'clustering' | 'tournament' | 'synthesizer' | 'translation';
   /** Event status */
   status: 'started' | 'progress' | 'completed' | 'error';
   /** Human-readable message */
@@ -363,7 +394,8 @@ export type ProgressDetail =
   | SynthesisDetail
   | ClusteringDetail
   | TournamentDetail
-  | SynthesizerDetail;
+  | SynthesizerDetail
+  | TranslationDetail;
 
 export interface PrepDetail {
   type: 'domains';
@@ -395,4 +427,9 @@ export interface TournamentDetail {
 export interface SynthesizerDetail {
   type: 'ideas';
   ideas: Array<{ title: string; criterion: string }>;
+}
+
+export interface TranslationDetail {
+  type: 'translated';
+  ideas: Array<{ title: string; actionItemCount: number }>;
 }

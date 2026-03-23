@@ -5,7 +5,7 @@
 
 import { generateBriefing, renderBriefingMarkdown } from './pipeline/synthesizer';
 import { createRunLogger } from './utils/logger';
-import type { DebateEntry, Domain } from './types';
+import type { DebateEntry, Domain, TranslatedBriefing } from './types';
 
 // Mock debate entries (simulating tournament output)
 const mockDebateEntries: DebateEntry[] = [
@@ -93,6 +93,7 @@ async function testPhase4() {
         clustering: 5000,
         tournament: 15000,
         synthesizer: 0,
+        translation: 0,
       },
     },
     runLogger,
@@ -113,7 +114,18 @@ async function testPhase4() {
   console.log('RENDERED MARKDOWN OUTPUT:');
   console.log('='.repeat(60));
   console.log('');
-  const markdown = renderBriefingMarkdown(briefing);
+  // Create a mock translated briefing for rendering
+  const translatedBriefing: TranslatedBriefing = {
+    queryPlainLanguage: query,
+    ideas: briefing.ideas.map((idea) => ({
+      title: idea.title,
+      explanation: idea.description,
+      whyForYou: idea.whyItMatters,
+      actionItems: ['Action item 1', 'Action item 2'],
+    })),
+    originalBriefing: briefing,
+  };
+  const markdown = renderBriefingMarkdown(translatedBriefing);
   console.log(markdown);
 
   console.log('');
