@@ -80,7 +80,7 @@ ISEE v1 solved the Synthesis phase well. It never truly solved the Extraction ph
 Generates 3-5 knowledge domains dynamically per query. There is no fixed domain list.
 
 **Stage 1 — Synthesis Layer**
-Preserves the v1 matrix approach. Target: ~60 responses across a curated set of heterogeneous LLMs, 10 cognitive frameworks, and dynamically generated knowledge domains. OpenRouter as primary provider.
+Preserves the v1 matrix approach. Target: ~60 responses across a curated set of heterogeneous LLMs, 11 cognitive frameworks, and dynamically generated knowledge domains. OpenRouter as primary provider.
 
 **Stage 2 — Emergent Clustering Agent**
 Key design decision: the clustering agent receives response *content only*, not source metadata (which model, framework, or domain produced it). This ensures clusters represent genuine intellectual angles rather than reflecting the source dimensions. Target: 5–7 clusters. Variance across runs is acceptable and expected — any run should surface valuable ideas.
