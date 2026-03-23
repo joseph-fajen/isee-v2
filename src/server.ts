@@ -8,7 +8,7 @@
  */
 
 import { runPipeline } from './pipeline';
-import type { AnalyzeRequest, ApiResponse, Briefing, ProgressEvent, RefinementMetadata } from './types';
+import type { AnalyzeRequest, ApiResponse, Briefing, TranslatedBriefing, ProgressEvent, RefinementMetadata } from './types';
 import { renderBriefingMarkdown } from './pipeline/synthesizer';
 import { assessQuery, getFollowUpQuestions, rewriteUserQuery } from './pipeline/refinement';
 
@@ -95,6 +95,7 @@ async function handleRequest(req: Request): Promise<Response> {
           // Send completion event
           sendEvent('complete', {
             briefing: result.briefing,
+            translatedBriefing: result.translatedBriefing,
             markdown: result.markdown,
           });
 
@@ -147,9 +148,10 @@ async function handleRequest(req: Request): Promise<Response> {
         success: true,
         data: {
           briefing: result.briefing,
+          translatedBriefing: result.translatedBriefing,
           markdown: result.markdown,
         },
-      } as ApiResponse<{ briefing: Briefing; markdown: string }>);
+      } as ApiResponse<{ briefing: Briefing; translatedBriefing: TranslatedBriefing; markdown: string }>);
     } catch (error) {
       console.error('[server] Analysis error:', error);
       return Response.json(

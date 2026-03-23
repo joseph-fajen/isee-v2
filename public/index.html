@@ -486,6 +486,10 @@
           <span class="stage-icon">○</span>
           <span>Generating final briefing...</span>
         </div>
+        <div class="stage" id="stage-translation">
+          <span class="stage-icon">○</span>
+          <span>Translating to plain language...</span>
+        </div>
       </div>
     </div>
 
@@ -511,7 +515,7 @@
   </div>
 
   <script>
-    const stages = ['prep', 'synthesis', 'clustering', 'tournament', 'synthesizer'];
+    const stages = ['prep', 'synthesis', 'clustering', 'tournament', 'synthesizer', 'translation'];
     let eventSource = null;
     let activityLogVisible = true;
 
@@ -821,6 +825,11 @@
               case 'ideas':
                 data.detail.ideas.forEach(idea => {
                   addLogEntry(data.stage, `→ ${idea.criterion}: "${idea.title}"`, true);
+                });
+                break;
+              case 'translated':
+                data.detail.ideas.forEach(idea => {
+                  addLogEntry(data.stage, `→ "${idea.title}" (${idea.actionItemCount} actions)`, true);
                 });
                 break;
             }

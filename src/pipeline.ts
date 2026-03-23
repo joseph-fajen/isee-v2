@@ -9,16 +9,18 @@
  * Stage 4: Synthesis Agent (briefing generation)
  */
 
-import type { PipelineConfig, ProgressEvent, Briefing, RunStats } from './types';
+import type { PipelineConfig, ProgressEvent, Briefing, TranslatedBriefing, RunStats } from './types';
 import { generateDomains } from './pipeline/prep';
 import { generateSynthesisMatrix } from './pipeline/synthesis';
 import { clusterResponses } from './pipeline/clustering';
 import { runTournament } from './pipeline/tournament';
 import { generateBriefing, renderBriefingMarkdown } from './pipeline/synthesizer';
+import { translateBriefing } from './pipeline/translation';
 import { createRunLogger } from './utils/logger';
 
 export interface PipelineResult {
   briefing: Briefing;
+  translatedBriefing: TranslatedBriefing;
   markdown: string;
 }
 
@@ -47,6 +49,7 @@ export async function runPipeline(
     clustering: 0,
     tournament: 0,
     synthesizer: 0,
+    translation: 0,
   };
 
   const log = (msg: string) => {
@@ -212,11 +215,37 @@ export async function runPipeline(
     briefing.refinement = config.refinement;
   }
 
-  // Update final stats
-  briefing.stats.totalDurationMs = Date.now() - startTime;
   briefing.stats.stageDurations.synthesizer = Date.now() - synthesizerStart;
 
   emit('synthesizer', 'completed', `Briefing generated with ${briefing.ideas.length} ideas`);
+
+  // =========================================================================
+  // Stage 5: Translation Agent - Plain-Language Briefing
+  // =========================================================================
+  emit('translation', 'started', 'Translating briefing to plain language...');
+  const translationStart = Date.now();
+
+  const translatedBriefing = await translateBriefing({
+    briefing,
+    runLogger,
+    onTranslationReady: (ideas) => {
+      emit('translation', 'progress', `Translated ${ideas.length} ideas`, {
+        detail: {
+          type: 'translated',
+          ideas: ideas.map((idea) => ({
+            title: idea.title,
+            actionItemCount: idea.actionItems.length,
+          })),
+        },
+      });
+    },
+  });
+
+  stageDurations.translation = Date.now() - translationStart;
+  emit('translation', 'completed', `Translation complete`);
+
+  // Update final stats
+  briefing.stats.totalDurationMs = Date.now() - startTime;
 
   runLogger.info(
     {
@@ -228,9 +257,9 @@ export async function runPipeline(
   );
 
   // Render markdown
-  const markdown = renderBriefingMarkdown(briefing);
+  const markdown = renderBriefingMarkdown(translatedBriefing);
 
-  return { briefing, markdown };
+  return { briefing, translatedBriefing, markdown };
 }
 
 /**

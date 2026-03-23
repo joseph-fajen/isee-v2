@@ -9,7 +9,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { Logger } from '../utils/logger';
-import type { Domain, Cluster, SkepticChallenge, ExtractedIdea, DebateEntry } from '../types';
+import type { Domain, Cluster, SkepticChallenge, ExtractedIdea, DebateEntry, SimplifiedIdea } from '../types';
 import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/logger';
 import {
   buildPrepAgentPrompt,
@@ -18,6 +18,7 @@ import {
   buildSkepticPrompt,
   buildRebuttalPrompt,
   buildSynthesisPrompt,
+  buildTranslationPrompt,
   buildAssessmentPrompt,
   buildQuestionGeneratorPrompt,
   buildRewriterPrompt,
@@ -81,6 +82,19 @@ const ExtractedIdeaSchema = z.object({
 
 const BriefingResponseSchema = z.object({
   ideas: z.array(ExtractedIdeaSchema),
+});
+
+// Translation Agent schemas
+const SimplifiedIdeaSchema = z.object({
+  title: z.string(),
+  explanation: z.string(),
+  whyForYou: z.string(),
+  actionItems: z.array(z.string()),
+});
+
+const TranslatedBriefingResponseSchema = z.object({
+  queryPlainLanguage: z.string(),
+  ideas: z.array(SimplifiedIdeaSchema),
 });
 
 // Query Refinement schemas
@@ -580,6 +594,71 @@ export async function generateBriefingWithClaude(
 
       if (!willRetry) {
         throw new Error(`Synthesis Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+
+  throw new Error('Unexpected: retry loop completed without result');
+}
+
+/**
+ * Translate the briefing into plain language with action items (structured output).
+ */
+export async function translateBriefingWithClaude(
+  query: string,
+  ideas: ExtractedIdea[],
+  logger: Logger
+): Promise<{ queryPlainLanguage: string; ideas: SimplifiedIdea[] }> {
+  const maxAttempts = 2;
+  const prompt = buildTranslationPrompt({ query, ideas });
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const callContext = {
+      stage: 'translation' as const,
+      model: AGENT_MODEL,
+      attempt,
+    };
+
+    logLLMCallStart(logger, callContext);
+    const startTime = Date.now();
+
+    try {
+      const response = await getClient().messages.parse({
+        model: AGENT_MODEL,
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }],
+        output_config: { format: zodOutputFormat(TranslatedBriefingResponseSchema) },
+      });
+
+      const durationMs = Date.now() - startTime;
+
+      if (!response.parsed_output) {
+        throw new Error('Translation Agent returned no structured output');
+      }
+
+      const result = response.parsed_output;
+
+      // Validate we got 3 translated ideas
+      if (result.ideas.length !== 3) {
+        logger.warn(
+          { ideaCount: result.ideas.length, expected: 3 },
+          'Unexpected idea count from Translation Agent'
+        );
+      }
+
+      logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(result).length);
+
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const willRetry = attempt < maxAttempts;
+
+      logLLMCallError(logger, callContext, errorMessage, willRetry);
+
+      if (!willRetry) {
+        throw new Error(`Translation Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
