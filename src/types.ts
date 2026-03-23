@@ -243,6 +243,8 @@ export interface SynthesisModel {
   description: string;
   /** Cost tier for reference */
   costTier: 'budget' | 'standard' | 'premium';
+  /** Optional max tokens override for thinking models that need more headroom */
+  maxTokens?: number;
 }
 
 // ============================================================================
