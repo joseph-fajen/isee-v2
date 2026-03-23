@@ -12,8 +12,13 @@ ISEE is a thinking amplifier. You give it a strategic question; it returns 3 bre
 Your Question
      ↓
 ┌─────────────────────────────────────────┐
+│  Stage 0: Prep Agent                    │
+│  Generate 3-5 knowledge domains         │
+└─────────────────────────────────────────┘
+     ↓
+┌─────────────────────────────────────────┐
 │  Stage 1: Synthesis Layer               │
-│  6 AI models × 11 frameworks × 5 domains│
+│  6 AI models × 11 frameworks × domains  │
 │  = ~60 diverse perspectives             │
 └─────────────────────────────────────────┘
      ↓
@@ -106,50 +111,13 @@ Each model responds through 11 cognitive frameworks:
 
 This isn't prompt decoration — frameworks genuinely shift how models approach problems.
 
-## Tech Stack
+## For Developers
 
-- **Runtime:** Bun (TypeScript)
-- **Synthesis Layer:** OpenRouter API
-- **Pipeline Agents:** Anthropic Claude API
-- **Frontend:** Single HTML file with Server-Sent Events
-- **Storage:** Markdown briefings saved to `output/`
-
-## Project Structure
-
-```
-src/
-├── server.ts              # HTTP server + SSE endpoint
-├── pipeline.ts            # Main orchestrator
-├── pipeline/
-│   ├── prep.ts            # Stage 0: Domain generation
-│   ├── synthesis.ts       # Stage 1: Multi-model queries
-│   ├── clustering.ts      # Stage 2: Emergent clustering
-│   ├── tournament.ts      # Stage 3: Advocate/Skeptic/Rebuttal
-│   └── synthesizer.ts     # Stage 4: Final briefing
-├── clients/
-│   ├── openrouter.ts      # OpenRouter API client
-│   └── anthropic.ts       # Anthropic Claude client
-├── config/
-│   ├── models.ts          # Model definitions
-│   └── frameworks.ts      # Framework prompts
-└── types.ts               # TypeScript interfaces
-
-public/
-└── index.html             # Web UI (single file)
-
-output/
-└── isee-briefing-*.md     # Generated briefings
-```
-
-## Environment Variables
-
-```bash
-OPENROUTER_API_KEY=...     # Required for synthesis layer
-ANTHROPIC_API_KEY=...      # Required for pipeline agents
-```
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for tech stack, project structure, data contracts, and build phases.
 
 ## Further Reading
 
-- `CLAUDE.md` — Detailed guidance for AI assistants working on this codebase
-- `PRD.md` — Product requirements and design principles
-- `ARCHITECTURE.md` — Stage-by-stage technical design
+- [PRD.md](./PRD.md) — Design principles, scope boundaries, success criteria
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — Stage-by-stage technical design, data contracts, project structure
+- [PROMPTS.md](./PROMPTS.md) — All LLM prompts with design rationale
+- [CLAUDE.md](./CLAUDE.md) — Developer conventions for working on this codebase

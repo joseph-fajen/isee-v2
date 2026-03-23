@@ -49,46 +49,47 @@ ISEE v1 solved the Synthesis phase well. It never truly solved the Extraction ph
 ## Core Pipeline
 
 ```
-[1] Query Input
+[0] Prep Agent
+    Generate 3-5 knowledge domains for this query
        ↓
-[2] Synthesis Layer
+[1] Synthesis Layer
     LLMs × Cognitive Frameworks × Knowledge Domains
     → Raw response matrix (~60 responses)
        ↓
-[3] Emergent Clustering Agent
+[2] Emergent Clustering Agent
     Reads all responses without source metadata
     Groups by genuine intellectual angle (target: 5–7 clusters)
        ↓
-[4] Tournament Layer
+[3] Tournament Layer
     ├── Advocate Agent (one per cluster)
     │   Argues why its cluster's angle is most valuable
     └── Skeptic Agent
         Challenges each advocate, stress-tests claims
        ↓
-[5] Synthesis Agent
+[4] Synthesis Agent
     Reads the full debate
     Selects 3 winning ideas with visible reasoning
        ↓
-[6] Briefing Output
+    Briefing Output
     3 extracted ideas + debate summary + confidence narrative
 ```
 
 ### Pipeline Stage Notes
 
-**Stage 2 — Synthesis Layer**  
-Preserves the v1 matrix approach. Target: ~60 responses across a curated set of heterogeneous LLMs, 10 cognitive frameworks, and dynamically generated knowledge domains. OpenRouter as primary provider.
+**Stage 0 — Prep Agent**
+Generates 3-5 knowledge domains dynamically per query. There is no fixed domain list.
 
-**Stage 3 — Emergent Clustering Agent**  
+**Stage 1 — Synthesis Layer**
+Preserves the v1 matrix approach. Target: ~60 responses across a curated set of heterogeneous LLMs, 11 cognitive frameworks, and dynamically generated knowledge domains. OpenRouter as primary provider.
+
+**Stage 2 — Emergent Clustering Agent**
 Key design decision: the clustering agent receives response *content only*, not source metadata (which model, framework, or domain produced it). This ensures clusters represent genuine intellectual angles rather than reflecting the source dimensions. Target: 5–7 clusters. Variance across runs is acceptable and expected — any run should surface valuable ideas.
 
-**Stage 4 — Tournament Layer**  
+**Stage 3 — Tournament Layer**
 The debate is the evaluation. Each cluster gets one Advocate agent that argues for the value of its angle. A single Skeptic agent challenges all advocates. This layer produces a structured debate transcript that becomes part of the final output.
 
-**Stage 5 — Synthesis Agent**  
-Reads the full debate and selects 3 ideas. Selection criteria: most surprising, most actionable, most likely to challenge the user's existing assumptions. The synthesis agent must articulate *why* each idea won — this reasoning becomes the confidence narrative.
-
-**Stage 6 — Briefing Output**  
-A single rendered document. Not a scored list. Not 66 files. The briefing contains:
+**Stage 4 — Synthesis Agent**
+Reads the full debate and selects 3 ideas. Selection criteria: most surprising, most actionable, most likely to challenge the user's existing assumptions. The synthesis agent must articulate *why* each idea won — this reasoning becomes the confidence narrative. The output is a single rendered briefing document containing:
 - 3 extracted ideas, each presented as a standalone insight
 - For each idea: the angle it emerged from, how it survived debate, why it was selected
 - Optional expandable section: the full debate transcript for users who want to see the reasoning chain
