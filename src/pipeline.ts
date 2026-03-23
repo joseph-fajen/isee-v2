@@ -9,7 +9,7 @@
  * Stage 4: Synthesis Agent (briefing generation)
  */
 
-import type { PipelineConfig, PipelineProgress, Briefing, RunStats } from './types';
+import type { PipelineConfig, ProgressEvent, Briefing, RunStats } from './types';
 import { generateDomains } from './pipeline/prep';
 import { generateSynthesisMatrix } from './pipeline/synthesis';
 import { clusterResponses } from './pipeline/clustering';
@@ -31,7 +31,7 @@ export interface PipelineResult {
  */
 export async function runPipeline(
   config: PipelineConfig,
-  onProgress?: (progress: PipelineProgress) => void
+  onProgress?: (progress: ProgressEvent) => void
 ): Promise<PipelineResult> {
   const { query, concurrencyLimit = 10, verbose = false } = config;
   const startTime = Date.now();
@@ -53,14 +53,25 @@ export async function runPipeline(
     if (verbose) console.log(msg);
   };
 
-  // Helper to emit progress
+  // Helper to emit progress with optional detail
   const emit = (
-    stage: PipelineProgress['stage'],
-    status: PipelineProgress['status'],
+    stage: ProgressEvent['stage'],
+    status: ProgressEvent['status'],
     message: string,
-    progress?: { current: number; total: number }
+    options?: {
+      progress?: { current: number; total: number };
+      subStage?: ProgressEvent['subStage'];
+      detail?: ProgressEvent['detail'];
+    }
   ) => {
-    onProgress?.({ stage, status, message, progress });
+    const event: ProgressEvent = {
+      stage,
+      status,
+      message,
+      timestamp: new Date().toISOString(),
+      ...options,
+    };
+    onProgress?.(event);
     log(`[${stage}] ${status}: ${message}`);
   };
 
@@ -70,7 +81,14 @@ export async function runPipeline(
   emit('prep', 'started', 'Generating knowledge domains...');
   const prepStart = Date.now();
 
-  const domains = await generateDomains(query, runLogger);
+  const domains = await generateDomains(query, runLogger, (generatedDomains) => {
+    emit('prep', 'progress', `Generated ${generatedDomains.length} domains`, {
+      detail: {
+        type: 'domains',
+        domains: generatedDomains.map(d => ({ name: d.name, description: d.description, focus: d.focus })),
+      },
+    });
+  });
 
   stageDurations.prep = Date.now() - prepStart;
   emit('prep', 'completed', `Generated ${domains.length} domains`);
@@ -84,7 +102,15 @@ export async function runPipeline(
   const responses = await generateSynthesisMatrix(
     { query, domains, concurrencyLimit, runLogger },
     (current, total) => {
-      emit('synthesis', 'progress', `${current}/${total} calls completed`, { current, total });
+      emit('synthesis', 'progress', `${current}/${total} calls completed`, { progress: { current, total } });
+    },
+    (detail) => {
+      emit('synthesis', 'progress', `${detail.modelId} + ${detail.frameworkId}`, {
+        detail: {
+          type: 'response',
+          ...detail,
+        },
+      });
     }
   );
 
@@ -97,7 +123,14 @@ export async function runPipeline(
   emit('clustering', 'started', 'Identifying intellectual angles...');
   const clusteringStart = Date.now();
 
-  const clusters = await clusterResponses(responses, query, runLogger);
+  const clusters = await clusterResponses(responses, query, runLogger, (identifiedClusters) => {
+    emit('clustering', 'progress', `Identified ${identifiedClusters.length} clusters`, {
+      detail: {
+        type: 'clusters',
+        clusters: identifiedClusters.map(c => ({ id: c.id, name: c.name, memberCount: c.memberIndices.length })),
+      },
+    });
+  });
 
   stageDurations.clustering = Date.now() - clusteringStart;
   emit('clustering', 'completed', `Identified ${clusters.length} distinct angles`);
@@ -108,11 +141,36 @@ export async function runPipeline(
   emit('tournament', 'started', 'Running tournament debate...');
   const tournamentStart = Date.now();
 
+  let advocatesCompleted = 0;
+  let rebuttalsCompleted = 0;
+  const totalClusters = clusters.length;
+
   const { debateEntries } = await runTournament({
     query,
     clusters,
     responses,
     runLogger,
+    onAdvocateComplete: (clusterId, clusterName, success) => {
+      advocatesCompleted++;
+      emit('tournament', 'progress', `Advocate ${advocatesCompleted}/${totalClusters}: ${clusterName}`, {
+        subStage: 'advocates',
+        progress: { current: advocatesCompleted, total: totalClusters },
+        detail: { type: 'advocate', clusterId, clusterName, success },
+      });
+    },
+    onSkepticComplete: (challengeCount) => {
+      emit('tournament', 'progress', `Skeptic challenged ${challengeCount} advocates`, {
+        subStage: 'skeptic',
+      });
+    },
+    onRebuttalComplete: (clusterId, clusterName, success) => {
+      rebuttalsCompleted++;
+      emit('tournament', 'progress', `Rebuttal ${rebuttalsCompleted}/${totalClusters}: ${clusterName}`, {
+        subStage: 'rebuttals',
+        progress: { current: rebuttalsCompleted, total: totalClusters },
+        detail: { type: 'rebuttal', clusterId, clusterName, success },
+      });
+    },
   });
 
   stageDurations.tournament = Date.now() - tournamentStart;
@@ -136,6 +194,17 @@ export async function runPipeline(
     debateEntries,
     stats: partialStats,
     runLogger,
+    onIdeasReady: (ideas) => {
+      emit('synthesizer', 'progress', `Selected ${ideas.length} ideas`, {
+        detail: {
+          type: 'ideas',
+          ideas: ideas.map((idea, i) => ({
+            title: idea.title,
+            criterion: ['Most Surprising', 'Most Actionable', 'Most Assumption-Challenging'][i] || 'Selected',
+          })),
+        },
+      });
+    },
   });
 
   // Update final stats

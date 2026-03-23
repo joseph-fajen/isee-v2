@@ -24,7 +24,8 @@ import { logger as baseLogger, type Logger } from '../utils/logger';
 export async function clusterResponses(
   responses: RawResponse[],
   query: string,
-  runLogger?: Logger
+  runLogger?: Logger,
+  onClustersReady?: (clusters: Cluster[]) => void
 ): Promise<Cluster[]> {
   const log = runLogger || baseLogger;
 
@@ -47,6 +48,9 @@ export async function clusterResponses(
       'Cluster assignment validation warnings'
     );
   }
+
+  // Emit clusters for SSE streaming
+  onClustersReady?.(clusters);
 
   log.info(
     {

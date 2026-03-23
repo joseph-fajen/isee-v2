@@ -30,6 +30,10 @@ interface TournamentConfig {
   clusters: Cluster[];
   responses: RawResponse[];
   runLogger?: Logger;
+  // SSE callbacks
+  onAdvocateComplete?: (clusterId: number, clusterName: string, success: boolean) => void;
+  onSkepticComplete?: (challengeCount: number) => void;
+  onRebuttalComplete?: (clusterId: number, clusterName: string, success: boolean) => void;
 }
 
 interface TournamentResult {
@@ -49,7 +53,7 @@ export async function runTournament(config: TournamentConfig): Promise<Tournamen
   log.info({ clusterCount: clusters.length }, 'Tournament starting');
 
   // Phase 3a: Run all advocates in parallel
-  const advocateResults = await runAdvocates(query, clusters, responses, log);
+  const advocateResults = await runAdvocates(query, clusters, responses, log, config.onAdvocateComplete);
   const successfulAdvocates = advocateResults.filter((r) => r.success);
 
   log.info(
@@ -69,10 +73,12 @@ export async function runTournament(config: TournamentConfig): Promise<Tournamen
   const advocateArgs = successfulAdvocates.map((r) => r.argument!);
   const challenges = await runSkeptic(query, advocateArgs, log);
 
+  config.onSkepticComplete?.(challenges.length);
+
   log.info({ challengeCount: challenges.length }, 'Skeptic complete');
 
   // Phase 3c: Run all rebuttals in parallel
-  const rebuttals = await runRebuttals(query, advocateArgs, challenges, log);
+  const rebuttals = await runRebuttals(query, advocateArgs, challenges, log, config.onRebuttalComplete);
 
   log.info(
     {
@@ -104,7 +110,8 @@ async function runAdvocates(
   query: string,
   clusters: Cluster[],
   responses: RawResponse[],
-  log: Logger
+  log: Logger,
+  onAdvocateComplete?: (clusterId: number, clusterName: string, success: boolean) => void
 ): Promise<AdvocateResult[]> {
   const promises = clusters.map(async (cluster): Promise<AdvocateResult> => {
     try {
@@ -118,6 +125,8 @@ async function runAdvocates(
         topMemberContents,
         log
       );
+
+      onAdvocateComplete?.(cluster.id, cluster.name, true);
 
       return {
         clusterId: cluster.id,
@@ -134,6 +143,9 @@ async function runAdvocates(
         { clusterId: cluster.id, clusterName: cluster.name, error: errorMessage },
         'Advocate failed'
       );
+
+      onAdvocateComplete?.(cluster.id, cluster.name, false);
+
       return {
         clusterId: cluster.id,
         success: false,
@@ -178,7 +190,8 @@ async function runRebuttals(
   query: string,
   advocateArgs: AdvocateArgument[],
   challenges: SkepticChallenge[],
-  log: Logger
+  log: Logger,
+  onRebuttalComplete?: (clusterId: number, clusterName: string, success: boolean) => void
 ): Promise<RebuttalResult[]> {
   const promises = advocateArgs.map(async (arg): Promise<RebuttalResult> => {
     const challenge = challenges.find((c) => c.clusterId === arg.clusterId);
@@ -201,6 +214,8 @@ async function runRebuttals(
         log
       );
 
+      onRebuttalComplete?.(arg.clusterId, arg.clusterName, true);
+
       return {
         clusterId: arg.clusterId,
         success: true,
@@ -216,6 +231,9 @@ async function runRebuttals(
         { clusterId: arg.clusterId, clusterName: arg.clusterName, error: errorMessage },
         'Rebuttal failed'
       );
+
+      onRebuttalComplete?.(arg.clusterId, arg.clusterName, false);
+
       return {
         clusterId: arg.clusterId,
         success: false,

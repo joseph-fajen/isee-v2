@@ -36,7 +36,15 @@ interface SynthesisConfig {
  */
 export async function generateSynthesisMatrix(
   config: SynthesisConfig,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  onResponseComplete?: (detail: {
+    modelId: string;
+    frameworkId: string;
+    domainName: string;
+    responseTimeMs?: number;
+    success: boolean;
+    error?: string;
+  }) => void
 ): Promise<RawResponse[]> {
   const { query, domains, concurrencyLimit = 15, runLogger } = config;
   const log = runLogger || baseLogger;
@@ -90,6 +98,15 @@ export async function generateSynthesisMatrix(
         };
 
         responses.push(response);
+
+        // Emit detail for SSE
+        onResponseComplete?.({
+          modelId: combo.model.id,
+          frameworkId: combo.framework.id,
+          domainName: combo.domain.name,
+          responseTimeMs: result.durationMs,
+          success: true,
+        });
       } catch (error) {
         failed++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -97,6 +114,15 @@ export async function generateSynthesisMatrix(
           model: combo.model.id,
           framework: combo.framework.id,
           domain: combo.domain.name,
+          error: errorMessage,
+        });
+
+        // Emit failure for SSE
+        onResponseComplete?.({
+          modelId: combo.model.id,
+          frameworkId: combo.framework.id,
+          domainName: combo.domain.name,
+          success: false,
           error: errorMessage,
         });
         // Don't throw - continue with remaining calls

@@ -243,6 +243,93 @@
       color: var(--accent);
       text-decoration: none;
     }
+
+    /* Activity Log */
+    .activity-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      display: none;
+    }
+
+    .activity-section.active {
+      display: block;
+    }
+
+    .activity-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .activity-title {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .activity-toggle {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 0.25rem 0.75rem;
+      font-size: 0.85rem;
+      border-radius: 4px;
+      cursor: pointer;
+      width: auto;
+    }
+
+    .activity-toggle:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .activity-log {
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 1rem;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+      font-size: 0.8rem;
+      line-height: 1.5;
+    }
+
+    .activity-log.hidden {
+      display: none;
+    }
+
+    .log-entry {
+      color: var(--text-secondary);
+      margin-bottom: 0.25rem;
+    }
+
+    .log-entry .timestamp {
+      color: var(--text-secondary);
+      opacity: 0.6;
+      margin-right: 0.5rem;
+    }
+
+    .log-entry .stage {
+      color: var(--accent);
+      font-weight: 500;
+      margin-right: 0.5rem;
+    }
+
+    .log-entry .message {
+      color: var(--text-primary);
+    }
+
+    .log-entry.error .message {
+      color: var(--error);
+    }
+
+    .log-entry.detail {
+      padding-left: 1rem;
+      opacity: 0.8;
+    }
   </style>
 </head>
 <body>
@@ -289,6 +376,17 @@
       </div>
     </div>
 
+    <!-- Activity Log Section -->
+    <div class="activity-section" id="activity-section">
+      <div class="activity-header">
+        <span class="activity-title">Real-time Activity</span>
+        <button class="activity-toggle" id="activity-toggle" onclick="toggleActivityLog()">
+          Hide activity log
+        </button>
+      </div>
+      <div class="activity-log" id="activity-log"></div>
+    </div>
+
     <!-- Output Section -->
     <div class="output-section" id="output-section">
       <div class="briefing-content" id="briefing-content"></div>
@@ -301,16 +399,16 @@
 
   <script>
     const stages = ['prep', 'synthesis', 'clustering', 'tournament', 'synthesizer'];
+    let eventSource = null;
+    let activityLogVisible = true;
 
     function setStageStatus(stageId, status) {
       const el = document.getElementById(`stage-${stageId}`);
       if (!el) return;
 
-      // Remove all status classes
       el.classList.remove('pending', 'active', 'completed', 'error');
       el.classList.add(status);
 
-      // Update icon
       const icon = el.querySelector('.stage-icon');
       switch (status) {
         case 'active':
@@ -327,6 +425,52 @@
       }
     }
 
+    function updateStageMessage(stageId, message) {
+      const el = document.getElementById(`stage-${stageId}`);
+      if (!el) return;
+      const span = el.querySelector('span:last-child');
+      if (span) span.textContent = message;
+    }
+
+    function addLogEntry(stage, message, isDetail = false, isError = false) {
+      const log = document.getElementById('activity-log');
+      if (!log) return;
+
+      const entry = document.createElement('div');
+      entry.className = 'log-entry' + (isDetail ? ' detail' : '') + (isError ? ' error' : '');
+
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+      entry.innerHTML = `<span class="timestamp">[${time}]</span><span class="stage">${stage}</span><span class="message">${message}</span>`;
+
+      log.appendChild(entry);
+
+      // Auto-scroll if user is near bottom
+      const threshold = 50;
+      const isNearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < threshold;
+      if (isNearBottom) {
+        log.scrollTop = log.scrollHeight;
+      }
+    }
+
+    function toggleActivityLog() {
+      const log = document.getElementById('activity-log');
+      const toggle = document.getElementById('activity-toggle');
+      activityLogVisible = !activityLogVisible;
+
+      if (activityLogVisible) {
+        log.classList.remove('hidden');
+        toggle.textContent = 'Hide activity log';
+      } else {
+        log.classList.add('hidden');
+        toggle.textContent = 'View real-time activity';
+      }
+    }
+
+    function clearActivityLog() {
+      const log = document.getElementById('activity-log');
+      if (log) log.innerHTML = '';
+    }
+
     async function analyze() {
       const query = document.getElementById('query').value.trim();
       if (!query) {
@@ -337,58 +481,144 @@
       // Reset UI
       const btn = document.getElementById('analyze-btn');
       const progressSection = document.getElementById('progress-section');
+      const activitySection = document.getElementById('activity-section');
       const outputSection = document.getElementById('output-section');
 
       btn.disabled = true;
       btn.textContent = 'Analyzing...';
       progressSection.classList.add('active');
+      activitySection.classList.add('active');
       outputSection.classList.remove('active');
 
-      // Reset all stages
+      // Reset all stages and activity log
       stages.forEach(s => setStageStatus(s, 'pending'));
+      clearActivityLog();
 
-      try {
-        // Simulate stage progression (in real implementation, use SSE or polling)
-        for (const stage of stages) {
-          setStageStatus(stage, 'active');
-          await new Promise(r => setTimeout(r, 500)); // Brief delay for visual feedback
-        }
+      // Close any existing connection
+      if (eventSource) {
+        eventSource.close();
+      }
 
-        // Make actual API call
-        const response = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query })
-        });
+      // Connect to SSE endpoint
+      const encodedQuery = encodeURIComponent(query);
+      eventSource = new EventSource(`/api/analyze/stream?query=${encodedQuery}`);
 
-        const result = await response.json();
+      let currentStage = null;
 
-        if (!result.success) {
-          throw new Error(result.error || 'Analysis failed');
-        }
+      eventSource.addEventListener('progress', (e) => {
+        try {
+          const data = JSON.parse(e.data);
 
-        // Mark all stages complete
-        stages.forEach(s => setStageStatus(s, 'completed'));
-
-        // Render the briefing
-        const briefingContent = document.getElementById('briefing-content');
-        briefingContent.innerHTML = marked.parse(result.data.markdown);
-        outputSection.classList.add('active');
-
-      } catch (error) {
-        console.error('Analysis error:', error);
-        stages.forEach(s => {
-          const el = document.getElementById(`stage-${s}`);
-          if (el.classList.contains('active')) {
-            setStageStatus(s, 'error');
+          // Update stage indicator
+          if (data.stage !== currentStage) {
+            if (currentStage) {
+              setStageStatus(currentStage, 'completed');
+            }
+            currentStage = data.stage;
+            setStageStatus(currentStage, 'active');
           }
-        });
+
+          // Update stage message if there's progress
+          if (data.progress) {
+            const pct = Math.round((data.progress.current / data.progress.total) * 100);
+            updateStageMessage(data.stage, `${data.message} (${pct}%)`);
+          }
+
+          // Add to activity log
+          addLogEntry(data.stage, data.message);
+
+          // Add detail entries
+          if (data.detail) {
+            switch (data.detail.type) {
+              case 'domains':
+                data.detail.domains.forEach(d => {
+                  addLogEntry(data.stage, `→ ${d.name}: ${d.focus}`, true);
+                });
+                break;
+              case 'response':
+                if (data.detail.success) {
+                  addLogEntry(data.stage, `→ ${data.detail.modelId} × ${data.detail.frameworkId} (${data.detail.responseTimeMs}ms)`, true);
+                } else {
+                  addLogEntry(data.stage, `→ FAILED: ${data.detail.modelId} × ${data.detail.frameworkId}: ${data.detail.error}`, true, true);
+                }
+                break;
+              case 'clusters':
+                data.detail.clusters.forEach(c => {
+                  addLogEntry(data.stage, `→ Cluster ${c.id}: "${c.name}" (${c.memberCount} responses)`, true);
+                });
+                break;
+              case 'advocate':
+              case 'rebuttal':
+                const status = data.detail.success ? '✓' : '✗';
+                addLogEntry(data.stage, `→ ${status} ${data.detail.clusterName}`, true, !data.detail.success);
+                break;
+              case 'ideas':
+                data.detail.ideas.forEach(idea => {
+                  addLogEntry(data.stage, `→ ${idea.criterion}: "${idea.title}"`, true);
+                });
+                break;
+            }
+          }
+        } catch (err) {
+          console.error('Error parsing progress event:', err);
+        }
+      });
+
+      eventSource.addEventListener('complete', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+
+          // Mark all stages complete
+          stages.forEach(s => setStageStatus(s, 'completed'));
+          addLogEntry('complete', 'Analysis complete!');
+
+          // Render the briefing
+          const briefingContent = document.getElementById('briefing-content');
+          briefingContent.innerHTML = marked.parse(data.markdown);
+          outputSection.classList.add('active');
+
+        } catch (err) {
+          console.error('Error parsing complete event:', err);
+        } finally {
+          cleanup();
+        }
+      });
+
+      eventSource.addEventListener('error', (e) => {
+        try {
+          // Try to parse error data if available
+          if (e.data) {
+            const data = JSON.parse(e.data);
+            addLogEntry('error', data.message || 'An error occurred', false, true);
+          }
+        } catch {
+          // Connection error
+          addLogEntry('error', 'Connection lost', false, true);
+        }
+
+        if (currentStage) {
+          setStageStatus(currentStage, 'error');
+        }
 
         const briefingContent = document.getElementById('briefing-content');
-        briefingContent.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+        briefingContent.innerHTML = `<div class="error-message">Error: Analysis failed. Check console for details.</div>`;
         outputSection.classList.add('active');
 
-      } finally {
+        cleanup();
+      });
+
+      eventSource.onerror = (e) => {
+        // Handle connection errors (not custom error events)
+        if (eventSource.readyState === EventSource.CLOSED) {
+          console.log('SSE connection closed');
+        }
+      };
+
+      function cleanup() {
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
         btn.disabled = false;
         btn.textContent = 'Analyze with ISEE';
       }

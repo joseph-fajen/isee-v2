@@ -19,12 +19,19 @@ import { logger as baseLogger, type Logger } from '../utils/logger';
  * @param runLogger - Optional logger with run context (creates default if not provided)
  * @returns Array of 3-5 dynamically generated domains
  */
-export async function generateDomains(query: string, runLogger?: Logger): Promise<Domain[]> {
+export async function generateDomains(
+  query: string,
+  runLogger?: Logger,
+  onDomainsReady?: (domains: Domain[]) => void
+): Promise<Domain[]> {
   const log = runLogger || baseLogger;
 
   log.info({ queryPreview: query.substring(0, 100) }, 'Prep agent starting domain generation');
 
   const domains = await generateDomainsWithClaude(query, log);
+
+  // Emit domains for SSE streaming
+  onDomainsReady?.(domains);
 
   log.info(
     {

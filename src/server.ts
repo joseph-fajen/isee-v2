@@ -8,7 +8,7 @@
  */
 
 import { runPipeline } from './pipeline';
-import type { AnalyzeRequest, ApiResponse, Briefing } from './types';
+import type { AnalyzeRequest, ApiResponse, Briefing, ProgressEvent } from './types';
 import { renderBriefingMarkdown } from './pipeline/synthesizer';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -33,6 +33,76 @@ async function handleRequest(req: Request): Promise<Response> {
   // Health check
   if (method === 'GET' && path === '/health') {
     return Response.json({ status: 'ok', timestamp: new Date().toISOString() });
+  }
+
+  // SSE: Stream analysis progress
+  if (method === 'GET' && path === '/api/analyze/stream') {
+    const query = url.searchParams.get('query');
+
+    if (!query) {
+      return new Response('Missing query parameter', { status: 400 });
+    }
+
+    console.log(`[server] Starting SSE stream for query: ${query.substring(0, 50)}...`);
+
+    const encoder = new TextEncoder();
+    let streamClosed = false;
+
+    const stream = new ReadableStream({
+      type: 'direct',
+      async pull(controller: ReadableStreamDirectController) {
+        const sendEvent = (event: string, data: unknown) => {
+          if (streamClosed) return;
+          const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+          controller.write(encoder.encode(payload));
+          controller.flush();
+        };
+
+        const sendProgress = (progressEvent: ProgressEvent) => {
+          sendEvent('progress', progressEvent);
+        };
+
+        try {
+          const result = await runPipeline(
+            { query, verbose: false },
+            (progress) => {
+              // The progress callback now receives rich ProgressEvent
+              sendProgress(progress as ProgressEvent);
+            }
+          );
+
+          // Save briefing to file
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const filename = `output/isee-briefing-${timestamp}.md`;
+          await Bun.write(filename, result.markdown);
+          console.log(`[server] Saved briefing to: ${filename}`);
+
+          // Send completion event
+          sendEvent('complete', {
+            briefing: result.briefing,
+            markdown: result.markdown,
+          });
+
+        } catch (error) {
+          console.error('[server] SSE pipeline error:', error);
+          sendEvent('error', {
+            message: error instanceof Error ? error.message : 'Pipeline failed',
+          });
+        } finally {
+          streamClosed = true;
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    });
   }
 
   // API: Start analysis

@@ -272,3 +272,73 @@ export interface AnalyzeStartResponse {
   runId: string;
   message: string;
 }
+
+// ============================================================================
+// SSE Progress Event Types
+// ============================================================================
+
+/**
+ * Rich progress event for SSE streaming.
+ * Extends basic progress with timestamps, details, and sub-stages.
+ */
+export interface ProgressEvent {
+  /** Pipeline stage */
+  stage: 'prep' | 'synthesis' | 'clustering' | 'tournament' | 'synthesizer';
+  /** Event status */
+  status: 'started' | 'progress' | 'completed' | 'error';
+  /** Human-readable message */
+  message: string;
+  /** ISO timestamp */
+  timestamp: string;
+  /** Progress counters (for synthesis, advocates, rebuttals) */
+  progress?: {
+    current: number;
+    total: number;
+  };
+  /** Tournament sub-stage */
+  subStage?: 'advocates' | 'skeptic' | 'rebuttals';
+  /** Stage-specific detail payload */
+  detail?: ProgressDetail;
+}
+
+/**
+ * Stage-specific detail payloads.
+ */
+export type ProgressDetail =
+  | PrepDetail
+  | SynthesisDetail
+  | ClusteringDetail
+  | TournamentDetail
+  | SynthesizerDetail;
+
+export interface PrepDetail {
+  type: 'domains';
+  domains: Array<{ name: string; description: string; focus: string }>;
+}
+
+export interface SynthesisDetail {
+  type: 'response';
+  modelId: string;
+  frameworkId: string;
+  domainName: string;
+  responseTimeMs?: number;
+  success: boolean;
+  error?: string;
+}
+
+export interface ClusteringDetail {
+  type: 'clusters';
+  clusters: Array<{ id: number; name: string; memberCount: number }>;
+}
+
+export interface TournamentDetail {
+  type: 'advocate' | 'skeptic' | 'rebuttal';
+  clusterId: number;
+  clusterName: string;
+  success: boolean;
+}
+
+export interface SynthesizerDetail {
+  type: 'ideas';
+  ideas: Array<{ title: string; criterion: string }>;
+}
