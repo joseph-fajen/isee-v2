@@ -33,6 +33,7 @@ export const MODELS: SynthesisModel[] = [
     openRouterId: 'google/gemini-2.5-pro',
     description: 'Strong cross-domain connections',
     costTier: 'premium',
+    maxTokens: 8000,
   },
   {
     id: 'llama-70b',
@@ -54,6 +55,7 @@ export const MODELS: SynthesisModel[] = [
     openRouterId: 'x-ai/grok-3-mini',
     description: 'Contrarian tendency valuable for debate seeding',
     costTier: 'standard',
+    maxTokens: 8000,
   },
 ];
 

@@ -79,6 +79,7 @@ export async function generateSynthesisMatrix(
         const result = await callOpenRouter({
           model: combo.model.openRouterId,
           prompt,
+          maxTokens: combo.model.maxTokens,
           logger: log,
           context: {
             framework: combo.framework.id,
