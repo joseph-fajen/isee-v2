@@ -330,6 +330,100 @@
       padding-left: 1rem;
       opacity: 0.8;
     }
+
+    /* Refinement Section */
+    .refinement-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      display: none;
+    }
+
+    .refinement-section.active {
+      display: block;
+    }
+
+    .refinement-title {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .refinement-subtitle {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+
+    .question-group {
+      margin-bottom: 1rem;
+    }
+
+    .question-group label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .question-group input {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 1rem;
+      font-family: inherit;
+    }
+
+    .question-group input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .refined-query-area {
+      width: 100%;
+      min-height: 100px;
+      padding: 1rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 1rem;
+      font-family: inherit;
+      resize: vertical;
+      margin-bottom: 1rem;
+    }
+
+    .refined-query-area:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 0.75rem 1.5rem;
+      font-size: 0.95rem;
+      border-radius: 8px;
+      cursor: pointer;
+      width: auto;
+      margin-top: 0.5rem;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
   </style>
 </head>
 <body>
@@ -347,6 +441,25 @@
         placeholder="How might we improve decision-making in complex organizations while preserving individual autonomy and avoiding bureaucratic paralysis?"
       ></textarea>
       <button id="analyze-btn" onclick="analyze()">Analyze with ISEE</button>
+    </div>
+
+    <!-- Refinement: Interview Section -->
+    <div class="refinement-section" id="interview-section">
+      <div class="refinement-title">Let's sharpen your query</div>
+      <div class="refinement-subtitle" id="refinement-reasoning"></div>
+      <div id="questions-container"></div>
+      <button id="submit-answers-btn" onclick="submitAnswers()">Continue</button>
+    </div>
+
+    <!-- Refinement: Approval Section -->
+    <div class="refinement-section" id="approval-section">
+      <div class="refinement-title">Refined query</div>
+      <div class="refinement-subtitle">ISEE rewrote your query with your additional context. You can edit it or use your original.</div>
+      <textarea class="refined-query-area" id="refined-query"></textarea>
+      <div class="btn-row">
+        <button id="approve-btn" onclick="approveQuery()">Use this query</button>
+        <button class="btn-secondary" onclick="useOriginalQuery()">Use my original query</button>
+      </div>
     </div>
 
     <!-- Progress Section -->
@@ -471,6 +584,14 @@
       if (log) log.innerHTML = '';
     }
 
+    let refinementState = {
+      originalQuery: '',
+      questions: [],
+      answers: [],
+      refinedQuery: '',
+      wasRefined: false,
+    };
+
     async function analyze() {
       const query = document.getElementById('query').value.trim();
       if (!query) {
@@ -478,30 +599,175 @@
         return;
       }
 
-      // Reset UI
+      refinementState = {
+        originalQuery: query,
+        questions: [],
+        answers: [],
+        refinedQuery: '',
+        wasRefined: false,
+      };
+
+      // Disable input
       const btn = document.getElementById('analyze-btn');
+      btn.disabled = true;
+      btn.textContent = 'Assessing query...';
+
+      try {
+        // Step 1: Assess query quality
+        const assessRes = await fetch('/api/refine/assess', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+        });
+        const assessData = await assessRes.json();
+
+        if (!assessData.success) {
+          throw new Error(assessData.error || 'Assessment failed');
+        }
+
+        if (assessData.data.sufficient) {
+          // Query is good — proceed directly to pipeline
+          startPipeline(query);
+        } else {
+          // Show interview UI
+          refinementState.questions = assessData.data.questions;
+          showInterviewUI(assessData.data.reasoning, assessData.data.questions);
+          btn.disabled = false;
+          btn.textContent = 'Analyze with ISEE';
+        }
+      } catch (error) {
+        console.error('Assessment error:', error);
+        // On assessment failure, proceed with original query (don't block the user)
+        startPipeline(query);
+      }
+    }
+
+    function showInterviewUI(reasoning, questions) {
+      const section = document.getElementById('interview-section');
+      const container = document.getElementById('questions-container');
+      const reasoningEl = document.getElementById('refinement-reasoning');
+
+      reasoningEl.textContent = reasoning;
+      container.innerHTML = '';
+
+      questions.forEach((q, i) => {
+        const group = document.createElement('div');
+        group.className = 'question-group';
+
+        const label = document.createElement('label');
+        label.setAttribute('for', `answer-${i}`);
+        label.textContent = q.question;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = `answer-${i}`;
+        input.placeholder = 'Your answer...';
+
+        group.appendChild(label);
+        group.appendChild(input);
+        container.appendChild(group);
+      });
+
+      section.classList.add('active');
+    }
+
+    async function submitAnswers() {
+      const answers = refinementState.questions.map((q, i) => ({
+        question: q.question,
+        answer: document.getElementById(`answer-${i}`).value.trim(),
+      })).filter(a => a.answer); // skip empty answers
+
+      if (answers.length === 0) {
+        // No answers provided — use original query
+        startPipeline(refinementState.originalQuery);
+        return;
+      }
+
+      refinementState.answers = answers;
+
+      // Show loading state
+      const btn = document.getElementById('submit-answers-btn');
+      btn.disabled = true;
+      btn.textContent = 'Rewriting query...';
+
+      try {
+        const res = await fetch('/api/refine/rewrite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            originalQuery: refinementState.originalQuery,
+            answers,
+          }),
+        });
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        refinementState.refinedQuery = data.data.refinedQuery;
+
+        // Hide interview, show approval
+        document.getElementById('interview-section').classList.remove('active');
+        document.getElementById('refined-query').value = data.data.refinedQuery;
+        document.getElementById('approval-section').classList.add('active');
+      } catch (error) {
+        console.error('Rewrite error:', error);
+        // On failure, proceed with original query
+        startPipeline(refinementState.originalQuery);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Continue';
+      }
+    }
+
+    function approveQuery() {
+      const query = document.getElementById('refined-query').value.trim();
+      refinementState.refinedQuery = query;
+      refinementState.wasRefined = true;
+      document.getElementById('approval-section').classList.remove('active');
+      startPipeline(query);
+    }
+
+    function useOriginalQuery() {
+      refinementState.wasRefined = false;
+      document.getElementById('approval-section').classList.remove('active');
+      startPipeline(refinementState.originalQuery);
+    }
+
+    function startPipeline(query) {
+      // Hide any refinement UI
+      document.getElementById('interview-section').classList.remove('active');
+      document.getElementById('approval-section').classList.remove('active');
+
+      const btn = document.getElementById('analyze-btn');
+      btn.disabled = true;
+      btn.textContent = 'Analyzing...';
+
       const progressSection = document.getElementById('progress-section');
       const activitySection = document.getElementById('activity-section');
       const outputSection = document.getElementById('output-section');
 
-      btn.disabled = true;
-      btn.textContent = 'Analyzing...';
       progressSection.classList.add('active');
       activitySection.classList.add('active');
       outputSection.classList.remove('active');
 
-      // Reset all stages and activity log
       stages.forEach(s => setStageStatus(s, 'pending'));
       clearActivityLog();
 
-      // Close any existing connection
-      if (eventSource) {
-        eventSource.close();
+      if (eventSource) eventSource.close();
+
+      // Build SSE URL with optional refinement metadata
+      let sseUrl = `/api/analyze/stream?query=${encodeURIComponent(query)}`;
+      if (refinementState.wasRefined) {
+        const meta = {
+          originalQuery: refinementState.originalQuery,
+          wasRefined: true,
+          answers: refinementState.answers,
+          refinedQuery: refinementState.refinedQuery,
+        };
+        sseUrl += `&refinement=${encodeURIComponent(JSON.stringify(meta))}`;
       }
 
-      // Connect to SSE endpoint
-      const encodedQuery = encodeURIComponent(query);
-      eventSource = new EventSource(`/api/analyze/stream?query=${encodedQuery}`);
+      eventSource = new EventSource(sseUrl);
 
       let currentStage = null;
 

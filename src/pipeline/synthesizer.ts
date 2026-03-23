@@ -85,6 +85,16 @@ export function renderBriefingMarkdown(briefing: Briefing): string {
   lines.push(`# ISEE Briefing`);
   lines.push('');
   lines.push(`**Query**: ${briefing.query}`);
+
+  // Show refinement info if query was refined
+  if (briefing.refinement?.wasRefined) {
+    lines.push('');
+    lines.push(`> *Original query*: "${briefing.refinement.originalQuery}"`);
+    lines.push('>');
+    lines.push('> *ISEE refined this query based on your additional context.*');
+    lines.push('');
+  }
+
   lines.push(`**Generated**: ${new Date(briefing.timestamp).toLocaleString()}`);
   lines.push('');
   lines.push('---');
