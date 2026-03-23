@@ -92,6 +92,7 @@ export function renderBriefingMarkdown(briefing: Briefing): string {
     lines.push(`> *Original query*: "${briefing.refinement.originalQuery}"`);
     lines.push('>');
     lines.push('> *ISEE refined this query based on your additional context.*');
+    lines.push('');
   }
 
   lines.push(`**Generated**: ${new Date(briefing.timestamp).toLocaleString()}`);

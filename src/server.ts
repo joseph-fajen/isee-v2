@@ -48,7 +48,13 @@ async function handleRequest(req: Request): Promise<Response> {
     let refinementMeta: RefinementMetadata | undefined;
     if (refinementParam) {
       try {
-        refinementMeta = JSON.parse(decodeURIComponent(refinementParam));
+        const parsed = JSON.parse(decodeURIComponent(refinementParam));
+        if (
+          typeof parsed.originalQuery === 'string' &&
+          typeof parsed.wasRefined === 'boolean'
+        ) {
+          refinementMeta = parsed as RefinementMetadata;
+        }
       } catch { /* ignore parse errors */ }
     }
 

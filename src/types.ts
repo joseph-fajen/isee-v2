@@ -253,7 +253,7 @@ export interface PipelineConfig {
  * Progress update emitted during pipeline execution.
  */
 export interface PipelineProgress {
-  stage: 'prep' | 'synthesis' | 'clustering' | 'tournament' | 'synthesizer';
+  stage: 'refinement' | 'prep' | 'synthesis' | 'clustering' | 'tournament' | 'synthesizer';
   status: 'started' | 'progress' | 'completed' | 'error';
   message: string;
   /** For synthesis stage: current/total calls */

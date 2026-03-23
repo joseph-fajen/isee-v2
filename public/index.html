@@ -653,10 +653,18 @@
       questions.forEach((q, i) => {
         const group = document.createElement('div');
         group.className = 'question-group';
-        group.innerHTML = `
-          <label for="answer-${i}">${q.question}</label>
-          <input type="text" id="answer-${i}" placeholder="Your answer...">
-        `;
+
+        const label = document.createElement('label');
+        label.setAttribute('for', `answer-${i}`);
+        label.textContent = q.question;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = `answer-${i}`;
+        input.placeholder = 'Your answer...';
+
+        group.appendChild(label);
+        group.appendChild(input);
         container.appendChild(group);
       });
 
