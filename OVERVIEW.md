@@ -6,10 +6,41 @@ ISEE is a thinking amplifier. You give it a strategic question; it returns 3 bre
 
 **The problem it solves:** When you ask an AI a complex question, you get *an* answer — plausible, coherent, and limited to one perspective. ISEE expands the possibility space by querying multiple models through multiple cognitive frameworks, then extracts signal from that noise through structured debate.
 
+## Smart Question Refinement
+
+Not sure how to phrase your question? ISEE helps.
+
+If your query is vague or missing important context, ISEE will ask 2-3 follow-up questions to understand:
+- What decision or problem you're actually facing
+- Your constraints (time, resources, situation)
+- Your role and perspective
+
+Then it rewrites your query to be specific and actionable — and shows you the refined version for approval before proceeding. You can edit it, accept it, or use your original.
+
+**Example:**
+- You enter: *"How can I be more productive?"*
+- ISEE asks about your specific situation
+- Refined query: *"How can I manage my financial paperwork when I work from home with frequent interruptions and no dedicated filing space?"*
+
+This refinement dramatically improves the quality of ISEE's output.
+
 ## How It Works
+
+ISEE follows a multi-stage pipeline. If your question needs refinement, it starts with a brief interview. Then it expands into diverse perspectives and extracts what survives scrutiny.
 
 ```
 Your Question
+     ↓
+┌─────────────────────────────────────────┐
+│  Query Assessment                       │
+│  Is your question specific enough?      │
+└─────────────────────────────────────────┘
+     ↓ (if refinement needed)
+┌─────────────────────────────────────────┐
+│  Follow-up Questions                    │
+│  2-3 questions to gather context        │
+│  → Refined query for your approval      │
+└─────────────────────────────────────────┘
      ↓
 ┌─────────────────────────────────────────┐
 │  Stage 0: Prep Agent                    │
@@ -37,10 +68,14 @@ Your Question
 ┌─────────────────────────────────────────┐
 │  Stage 4: Synthesis                     │
 │  Select 3 ideas that survived scrutiny  │
-│  + confidence narratives                │
 └─────────────────────────────────────────┘
      ↓
-Your Briefing: 3 ideas with full debate transcript
+┌─────────────────────────────────────────┐
+│  Stage 5: Translation                   │
+│  Plain language + action items          │
+└─────────────────────────────────────────┘
+     ↓
+Your Briefing
 ```
 
 ## Why This Architecture?
@@ -77,14 +112,17 @@ ISEE is **not** for factual lookups, code generation, or questions with single c
 
 ## What You Get
 
-A briefing containing:
+A briefing in plain language containing:
 
-1. **3 extracted ideas** — each with:
-   - The insight itself
-   - Why it emerged from the debate
-   - Why it matters for your situation
+1. **3 ideas worth considering** — each with:
+   - A clear explanation in everyday language
+   - Why this might work for your specific situation
+   - **"Try this"** — 2-3 concrete action items you can do immediately
 
-2. **Full debate transcript** (expandable) — see how each cluster's advocate argued, how the skeptic challenged, and how the rebuttal responded
+2. **Full analysis** (expandable) — the complete intellectual depth:
+   - Detailed confidence narratives
+   - How each idea emerged from the debate
+   - Full debate transcript (advocate arguments, skeptic challenges, rebuttals)
 
 3. **Statistics** — synthesis calls, clusters analyzed, duration
 
