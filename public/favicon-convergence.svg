@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="#0f0f0f"/>
+  <!-- Many dots on left (representing 60 perspectives) -->
+  <circle cx="6" cy="6" r="2" fill="#f59e0b" opacity="0.5"/>
+  <circle cx="6" cy="12" r="2" fill="#f59e0b" opacity="0.5"/>
+  <circle cx="6" cy="18" r="2" fill="#f59e0b" opacity="0.5"/>
+  <circle cx="6" cy="24" r="2" fill="#f59e0b" opacity="0.5"/>
+  <circle cx="11" cy="9" r="2" fill="#f59e0b" opacity="0.6"/>
+  <circle cx="11" cy="16" r="2" fill="#f59e0b" opacity="0.6"/>
+  <circle cx="11" cy="23" r="2" fill="#f59e0b" opacity="0.6"/>
+  <!-- Convergence lines -->
+  <path d="M8 6 L24 10" stroke="#f59e0b" stroke-width="0.75" opacity="0.4"/>
+  <path d="M8 12 L24 10" stroke="#f59e0b" stroke-width="0.75" opacity="0.4"/>
+  <path d="M13 9 L24 10" stroke="#f59e0b" stroke-width="0.75" opacity="0.4"/>
+  <path d="M13 16 L24 16" stroke="#f59e0b" stroke-width="0.75" opacity="0.4"/>
+  <path d="M8 18 L24 16" stroke="#f59e0b" stroke-width="0.75" opacity="0.4"/>
+  <path d="M8 24 L24 22" stroke="#f59e0b" stroke-width="0.75" opacity="0.4"/>
+  <path d="M13 23 L24 22" stroke="#f59e0b" stroke-width="0.75" opacity="0.4"/>
+  <!-- Three output dots (the 3 ideas) -->
+  <circle cx="25" cy="10" r="2.5" fill="#f59e0b"/>
+  <circle cx="25" cy="16" r="2.5" fill="#f59e0b"/>
+  <circle cx="25" cy="22" r="2.5" fill="#f59e0b"/>
+</svg>

@@ -30,6 +30,16 @@ async function handleRequest(req: Request): Promise<Response> {
     });
   }
 
+  // Serve favicon
+  if (method === 'GET' && path.endsWith('.svg') && path.startsWith('/favicon')) {
+    const file = Bun.file(`public${path}`);
+    if (await file.exists()) {
+      return new Response(file, {
+        headers: { 'Content-Type': 'image/svg+xml' },
+      });
+    }
+  }
+
   // Health check
   if (method === 'GET' && path === '/health') {
     return Response.json({ status: 'ok', timestamp: new Date().toISOString() });
