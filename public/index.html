@@ -425,6 +425,120 @@
       flex-direction: column;
       gap: 0.5rem;
     }
+
+    /* About Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+      z-index: 1000;
+    }
+
+    .modal-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-width: 700px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 2rem;
+      position: relative;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 1.5rem;
+      cursor: pointer;
+      width: auto;
+      padding: 0.25rem 0.5rem;
+      line-height: 1;
+    }
+
+    .modal-close:hover {
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      line-height: 1.7;
+    }
+
+    .modal-body h1 {
+      font-size: 1.6rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+
+    .modal-body h2 {
+      font-size: 1.3rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+      color: var(--accent);
+    }
+
+    .modal-body p {
+      margin-bottom: 1rem;
+    }
+
+    .modal-body ul, .modal-body ol {
+      margin-bottom: 1rem;
+      padding-left: 1.5rem;
+    }
+
+    .modal-body li {
+      margin-bottom: 0.25rem;
+    }
+
+    .modal-body pre {
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+    }
+
+    .modal-body code {
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    }
+
+    .modal-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+    }
+
+    .modal-body th, .modal-body td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+
+    .modal-body th {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+    }
+
+    .modal-body strong {
+      color: var(--text-primary);
+    }
   </style>
 </head>
 <body>
@@ -510,8 +624,16 @@
       <div class="briefing-content" id="briefing-content"></div>
     </div>
 
+    <!-- About Modal -->
+    <div class="modal-overlay" id="about-modal" role="dialog" aria-modal="true" aria-labelledby="about-title">
+      <div class="modal-box">
+        <button class="modal-close" id="about-close" aria-label="Close">&times;</button>
+        <div class="modal-body" id="about-content"></div>
+      </div>
+    </div>
+
     <footer>
-      <p>ISEE v2 &mdash; <a href="PRD.md">Read the PRD</a></p>
+      <p>ISEE v2 &mdash; <a href="#" id="about-link">About ISEE</a></p>
     </footer>
   </div>
 
@@ -899,6 +1021,49 @@
         btn.textContent = 'Analyze with ISEE';
       }
     }
+    // About modal
+    (function() {
+      const overlay = document.getElementById('about-modal');
+      const content = document.getElementById('about-content');
+      const link = document.getElementById('about-link');
+      const closeBtn = document.getElementById('about-close');
+
+      function openAbout(e) {
+        e.preventDefault();
+        fetch('/about')
+          .then(res => {
+            if (!res.ok) throw new Error('Failed to load');
+            return res.text();
+          })
+          .then(md => {
+            content.innerHTML = marked.parse(md);
+            overlay.classList.add('visible');
+            document.body.style.overflow = 'hidden';
+            closeBtn.focus();
+          })
+          .catch(() => {
+            content.innerHTML = '<p>Could not load about content.</p>';
+            overlay.classList.add('visible');
+            document.body.style.overflow = 'hidden';
+            closeBtn.focus();
+          });
+      }
+
+      function closeAbout() {
+        overlay.classList.remove('visible');
+        document.body.style.overflow = '';
+        link.focus();
+      }
+
+      link.addEventListener('click', openAbout);
+      closeBtn.addEventListener('click', closeAbout);
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeAbout();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && overlay.classList.contains('visible')) closeAbout();
+      });
+    })();
   </script>
 </body>
 </html>
