@@ -10,25 +10,35 @@ import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-const DB_PATH = process.env.DB_PATH || './data/isee.db';
-
 let _db: Database | null = null;
 
 /**
  * Returns the singleton SQLite database connection.
  * Creates the database file and parent directory if they do not exist.
  * WAL mode is enabled for better read concurrency during long pipeline runs.
+ *
+ * The database path is read from the `DB_PATH` environment variable at
+ * connection creation time (not module load time) so that tests can override
+ * it with `process.env.DB_PATH = ':memory:'` before the first call.
  */
 export function getDatabase(): Database {
   if (_db) return _db;
 
-  // Ensure the parent directory exists
-  mkdirSync(dirname(DB_PATH), { recursive: true });
+  const dbPath = process.env.DB_PATH || './data/isee.db';
 
-  _db = new Database(DB_PATH, { create: true });
+  // Ensure the parent directory exists (no-op for ':memory:')
+  if (dbPath !== ':memory:') {
+    mkdirSync(dirname(dbPath), { recursive: true });
+  }
 
-  // Enable WAL mode for better concurrent read performance
-  _db.exec('PRAGMA journal_mode = WAL;');
+  _db = new Database(dbPath, { create: true });
+
+  // WAL mode improves concurrent read performance for file-backed databases.
+  // SQLite silently ignores it for :memory: databases (returns 'memory' instead
+  // of 'wal'), so we only set it for file-backed databases.
+  if (dbPath !== ':memory:') {
+    _db.exec('PRAGMA journal_mode = WAL;');
+  }
 
   // Enforce foreign key constraints
   _db.exec('PRAGMA foreign_keys = ON;');

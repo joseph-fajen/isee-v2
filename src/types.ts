@@ -331,6 +331,56 @@ export interface SynthesisModel {
 }
 
 // ============================================================================
+// Production Layer Types
+// ============================================================================
+
+/**
+ * Persisted record for a single pipeline execution.
+ */
+export interface RunRecord {
+  id: string;
+  apiKeyId?: string;
+  query: string;
+  refinedQuery?: string;
+  status: 'running' | 'completed' | 'failed';
+  startedAt: string;
+  completedAt?: string;
+  durationMs?: number;
+  errorMessage?: string;
+
+  // Stats
+  synthesisCallCount?: number;
+  successfulCalls?: number;
+  clusterCount?: number;
+
+  // Cost
+  totalCostUsd?: number;
+  openrouterCostUsd?: number;
+  anthropicCostUsd?: number;
+}
+
+/**
+ * Telemetry record for a single LLM API call within a run.
+ */
+export interface LlmCallRecord {
+  runId: string;
+  stage: string;
+  provider: 'openrouter' | 'anthropic';
+  model: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  latencyMs?: number;
+  success: boolean;
+  errorType?: string;
+  errorMessage?: string;
+  costUsd?: number;
+  framework?: string;
+  domain?: string;
+  clusterId?: number;
+  timestamp: string;
+}
+
+// ============================================================================
 // API Response Types
 // ============================================================================
 

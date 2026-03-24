@@ -9,6 +9,8 @@ export { getDatabase, closeDatabase } from './connection';
 export { runMigrations } from './migrations';
 export type { Migration } from './migrations';
 export { migrations } from './schema';
+export { createRun, getRunById, updateRun, getRuns } from './runs';
+export { logLlmCall, getLlmCallsByRunId, getCallStats } from './llm-calls';
 
 import { getDatabase } from './connection';
 import { runMigrations } from './migrations';
