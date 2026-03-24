@@ -151,6 +151,47 @@ export async function generateSynthesisMatrix(
         : 0,
   });
 
+  // -------------------------------------------------------------------------
+  // Graceful degradation checks
+  // -------------------------------------------------------------------------
+  const failureRate = total > 0 ? failed / total : 0;
+
+  if (failureRate > 0.5) {
+    // >50% failed — abort with explanation
+    throw new Error(
+      `Synthesis stage aborted: ${failed}/${total} calls failed (${Math.round(failureRate * 100)}%). ` +
+      `This exceeds the 50% failure threshold. Check API keys and provider status.`
+    );
+  }
+
+  if (failureRate >= 0.2) {
+    // 20-50% failed — warn and continue with reduced matrix
+    log.warn(
+      { failed, total, failureRate: Math.round(failureRate * 100) },
+      'Synthesis running in degraded mode: continuing with reduced response matrix'
+    );
+  }
+
+  // Check if a single model failed all its calls — exclude and continue
+  const modelCallCounts = new Map<string, { total: number; failed: number }>();
+  for (const combo of combinations) {
+    const entry = modelCallCounts.get(combo.model.id) ?? { total: 0, failed: 0 };
+    entry.total++;
+    modelCallCounts.set(combo.model.id, entry);
+  }
+  for (const failure of failures) {
+    const entry = modelCallCounts.get(failure.model);
+    if (entry) entry.failed++;
+  }
+
+  const fullyFailedModels: string[] = [];
+  for (const [modelId, counts] of modelCallCounts) {
+    if (counts.total > 0 && counts.failed === counts.total) {
+      fullyFailedModels.push(modelId);
+      log.warn({ modelId, callCount: counts.total }, 'Excluding model: all calls failed');
+    }
+  }
+
   return responses;
 }
 
