@@ -25,10 +25,12 @@ describe('getDatabase', () => {
     expect(db1).toBe(db2);
   });
 
-  test('has WAL journal mode enabled', () => {
+  test('does not use WAL journal mode for :memory: databases', () => {
+    // SQLite does not support WAL for in-memory databases; it falls back to
+    // 'memory' mode. WAL is only enabled for file-backed databases.
     const db = getDatabase();
     const row = db.query<{ journal_mode: string }, []>('PRAGMA journal_mode;').get();
-    expect(row?.journal_mode).toBe('wal');
+    expect(row?.journal_mode).toBe('memory');
   });
 
   test('has foreign key enforcement enabled', () => {
