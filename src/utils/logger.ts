@@ -3,16 +3,23 @@
  *
  * Uses Pino for high-performance JSON logging.
  * Child loggers propagate runId for request tracing.
+ * Includes trace_id and span_id from active OpenTelemetry span for log correlation.
  */
 
 import pino from 'pino';
+import { getCurrentTraceContext } from '../observability/spans';
 
-// Base logger configuration
+// Base logger configuration with trace context mixin
 export const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
   timestamp: pino.stdTimeFunctions.isoTime,
   formatters: {
     level: (label) => ({ level: label }),
+  },
+  mixin() {
+    const { traceId, spanId } = getCurrentTraceContext();
+    if (traceId) return { trace_id: traceId, span_id: spanId };
+    return {};
   },
 });
 
@@ -21,7 +28,7 @@ export const logger = pino({
  * All logs from this logger will include the runId.
  */
 export function createRunLogger(runId: string) {
-  return logger.child({ runId });
+  return logger.child({ run_id: runId });
 }
 
 /**
