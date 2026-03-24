@@ -672,12 +672,12 @@ bun run pipeline "Test query"
 
 Update this section as work progresses:
 
-### Foundation (Week 1-2)
-- [ ] 1.1 Database setup
-- [ ] 1.2 Run persistence
-- [ ] 1.3 API key authentication
-- [ ] 1.4 Rate limiting
-- [ ] 1.5 Input validation
+### Foundation (Week 1-2) ✅ COMPLETE
+- [x] 1.1 Database setup (PR #14)
+- [x] 1.2 Run persistence (PR #15)
+- [x] 1.3 API key authentication (PR #16)
+- [x] 1.4 Rate limiting (PR #17)
+- [x] 1.5 Input validation (PR #18)
 
 ### Observability (Week 3-4)
 - [ ] 2.1 OpenTelemetry setup
