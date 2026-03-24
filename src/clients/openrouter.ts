@@ -11,6 +11,7 @@ import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/lo
 import { getTracer } from '../observability/tracing';
 import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';
 import { calculateCost } from '../observability/cost';
+import { DEFAULT_RETRY_CONFIG, isRetryableError, calculateDelay } from '../resilience/retry';
 
 // Lazy initialization to avoid errors when env vars not set
 let client: OpenAI | null = null;
@@ -61,7 +62,7 @@ export interface OpenRouterResult {
  */
 export async function callOpenRouter(options: OpenRouterCallOptions): Promise<OpenRouterResult> {
   const { model, prompt, maxTokens = 1500, logger, context } = options;
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const callContext = {
@@ -115,17 +116,17 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
-      if (!willRetry) {
-        throw new Error(`OpenRouter call failed after ${maxAttempts} attempts: ${errorMessage}`);
+      if (!willRetry || !isRetryableError(error)) {
+        throw new Error(`OpenRouter call failed after ${attempt} attempt(s): ${errorMessage}`);
       }
 
-      // Brief delay before retry
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const delayMs = calculateDelay(attempt, DEFAULT_RETRY_CONFIG);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     } finally {
       span.end();
     }

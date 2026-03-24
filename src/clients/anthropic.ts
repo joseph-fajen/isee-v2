@@ -14,6 +14,7 @@ import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/lo
 import { getTracer } from '../observability/tracing';
 import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';
 import { calculateCost } from '../observability/cost';
+import { DEFAULT_RETRY_CONFIG, isRetryableError, calculateDelay } from '../resilience/retry';
 import {
   buildPrepAgentPrompt,
   buildClusteringPrompt,
@@ -122,7 +123,7 @@ const AGENT_MODEL = 'claude-sonnet-4-5';
  * Generate knowledge domains for a query using structured output.
  */
 export async function generateDomainsWithClaude(query: string, logger: Logger): Promise<Domain[]> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildPrepAgentPrompt({ query });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -175,7 +176,7 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
       return domains;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -185,7 +186,7 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
       }
 
       // Brief delay before retry
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -202,7 +203,7 @@ export async function clusterResponsesWithClaude(
   anonymizedResponses: Array<{ index: number; content: string }>,
   logger: Logger
 ): Promise<Cluster[]> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildClusteringPrompt({ query, responses: anonymizedResponses });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -250,7 +251,7 @@ export async function clusterResponsesWithClaude(
       return clusters;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -259,7 +260,7 @@ export async function clusterResponsesWithClaude(
         throw new Error(`Clustering Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -278,7 +279,7 @@ export async function generateAdvocateArgument(
   topMemberResponses: string[],
   logger: Logger
 ): Promise<string> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildAdvocatePrompt({ query, clusterName, clusterSummary, topMemberResponses });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -317,7 +318,7 @@ export async function generateAdvocateArgument(
       return text;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -326,7 +327,7 @@ export async function generateAdvocateArgument(
         throw new Error(`Advocate failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -343,7 +344,7 @@ export async function generateSkepticChallenges(
   advocateArguments: Array<{ clusterId: number; clusterName: string; argument: string }>,
   logger: Logger
 ): Promise<SkepticChallenge[]> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildSkepticPrompt({ query, advocateArguments });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -383,7 +384,7 @@ export async function generateSkepticChallenges(
       return challenges;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -392,7 +393,7 @@ export async function generateSkepticChallenges(
         throw new Error(`Skeptic Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -411,7 +412,7 @@ export async function generateRebuttal(
   skepticChallenge: string,
   logger: Logger
 ): Promise<string> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildRebuttalPrompt({ query, clusterName, advocateArgument, skepticChallenge });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -450,7 +451,7 @@ export async function generateRebuttal(
       return text;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -459,7 +460,7 @@ export async function generateRebuttal(
         throw new Error(`Rebuttal failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -475,7 +476,7 @@ export async function assessQueryQuality(
   query: string,
   logger: Logger
 ): Promise<{ sufficient: boolean; missingCriteria: string[]; reasoning: string }> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildAssessmentPrompt({ query });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -504,7 +505,7 @@ export async function assessQueryQuality(
       return response.parsed_output;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Query assessment failed after ${maxAttempts} attempts: ${errorMessage}`);
@@ -524,7 +525,7 @@ export async function generateRefinementQuestions(
   missingCriteria: string[],
   logger: Logger
 ): Promise<Array<{ targetsCriterion: string; question: string }>> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildQuestionGeneratorPrompt({ query, missingCriteria });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -553,7 +554,7 @@ export async function generateRefinementQuestions(
       return response.parsed_output.questions;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Question generation failed after ${maxAttempts} attempts: ${errorMessage}`);
@@ -573,7 +574,7 @@ export async function rewriteQuery(
   answers: Array<{ question: string; answer: string }>,
   logger: Logger
 ): Promise<string> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildRewriterPrompt({ originalQuery, answers });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -603,7 +604,7 @@ export async function rewriteQuery(
       return text.trim();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Query rewrite failed after ${maxAttempts} attempts: ${errorMessage}`);
@@ -623,7 +624,7 @@ export async function generateBriefingWithClaude(
   debateEntries: DebateEntry[],
   logger: Logger
 ): Promise<ExtractedIdea[]> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildSynthesisPrompt({ query, debateEntries });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -671,7 +672,7 @@ export async function generateBriefingWithClaude(
       return ideas;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -680,7 +681,7 @@ export async function generateBriefingWithClaude(
         throw new Error(`Synthesis Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -697,7 +698,7 @@ export async function translateBriefingWithClaude(
   ideas: ExtractedIdea[],
   logger: Logger
 ): Promise<{ queryPlainLanguage: string; ideas: SimplifiedIdea[] }> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildTranslationPrompt({ query, ideas });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -745,7 +746,7 @@ export async function translateBriefingWithClaude(
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -754,7 +755,7 @@ export async function translateBriefingWithClaude(
         throw new Error(`Translation Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
