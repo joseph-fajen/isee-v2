@@ -14,6 +14,9 @@ import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/lo
 import { getTracer } from '../observability/tracing';
 import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';
 import { calculateCost } from '../observability/cost';
+import { DEFAULT_RETRY_CONFIG, isRetryableError, calculateDelay } from '../resilience/retry';
+import { TIMEOUTS, createTimeoutSignal } from '../resilience/timeout';
+import { getCircuitBreaker, CircuitOpenError } from '../resilience/circuit-breaker';
 import {
   buildPrepAgentPrompt,
   buildClusteringPrompt,
@@ -118,11 +121,14 @@ const RefinementQuestionsSchema = z.object({
 // Must be a model that supports structured outputs (claude-sonnet-4-5, claude-sonnet-4-6, etc.)
 const AGENT_MODEL = 'claude-sonnet-4-5';
 
+// Circuit breaker for all Anthropic API calls
+const getBreaker = () => getCircuitBreaker('anthropic');
+
 /**
  * Generate knowledge domains for a query using structured output.
  */
 export async function generateDomainsWithClaude(query: string, logger: Logger): Promise<Domain[]> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildPrepAgentPrompt({ query });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -138,12 +144,15 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'prep' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(DomainsResponseSchema) },
-      });
+      const response = await getBreaker().execute(() => getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(DomainsResponseSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      ));
 
       const durationMs = Date.now() - startTime;
 
@@ -174,8 +183,9 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
 
       return domains;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -185,7 +195,7 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
       }
 
       // Brief delay before retry
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -202,7 +212,7 @@ export async function clusterResponsesWithClaude(
   anonymizedResponses: Array<{ index: number; content: string }>,
   logger: Logger
 ): Promise<Cluster[]> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildClusteringPrompt({ query, responses: anonymizedResponses });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -218,12 +228,15 @@ export async function clusterResponsesWithClaude(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'clustering' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(ClusteringResponseSchema) },
-      });
+      const response = await getBreaker().execute(() => getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(ClusteringResponseSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      ));
 
       const durationMs = Date.now() - startTime;
 
@@ -249,8 +262,9 @@ export async function clusterResponsesWithClaude(
 
       return clusters;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -259,7 +273,7 @@ export async function clusterResponsesWithClaude(
         throw new Error(`Clustering Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -278,7 +292,7 @@ export async function generateAdvocateArgument(
   topMemberResponses: string[],
   logger: Logger
 ): Promise<string> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildAdvocatePrompt({ query, clusterName, clusterSummary, topMemberResponses });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -294,11 +308,14 @@ export async function generateAdvocateArgument(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'advocate' });
 
     try {
-      const response = await getClient().messages.create({
-        model: AGENT_MODEL,
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }],
-      });
+      const response = await getBreaker().execute(() => getClient().messages.create(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }],
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      ));
 
       const durationMs = Date.now() - startTime;
       const textBlock = response.content[0];
@@ -316,8 +333,9 @@ export async function generateAdvocateArgument(
 
       return text;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -326,7 +344,7 @@ export async function generateAdvocateArgument(
         throw new Error(`Advocate failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -343,7 +361,7 @@ export async function generateSkepticChallenges(
   advocateArguments: Array<{ clusterId: number; clusterName: string; argument: string }>,
   logger: Logger
 ): Promise<SkepticChallenge[]> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildSkepticPrompt({ query, advocateArguments });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -359,12 +377,15 @@ export async function generateSkepticChallenges(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'skeptic' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(SkepticChallengesResponseSchema) },
-      });
+      const response = await getBreaker().execute(() => getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(SkepticChallengesResponseSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      ));
 
       const durationMs = Date.now() - startTime;
 
@@ -382,8 +403,9 @@ export async function generateSkepticChallenges(
 
       return challenges;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -392,7 +414,7 @@ export async function generateSkepticChallenges(
         throw new Error(`Skeptic Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -411,7 +433,7 @@ export async function generateRebuttal(
   skepticChallenge: string,
   logger: Logger
 ): Promise<string> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildRebuttalPrompt({ query, clusterName, advocateArgument, skepticChallenge });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -427,11 +449,14 @@ export async function generateRebuttal(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'rebuttal' });
 
     try {
-      const response = await getClient().messages.create({
-        model: AGENT_MODEL,
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }],
-      });
+      const response = await getBreaker().execute(() => getClient().messages.create(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }],
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      ));
 
       const durationMs = Date.now() - startTime;
       const textBlock = response.content[0];
@@ -449,8 +474,9 @@ export async function generateRebuttal(
 
       return text;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -459,7 +485,7 @@ export async function generateRebuttal(
         throw new Error(`Rebuttal failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -475,7 +501,7 @@ export async function assessQueryQuality(
   query: string,
   logger: Logger
 ): Promise<{ sufficient: boolean; missingCriteria: string[]; reasoning: string }> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildAssessmentPrompt({ query });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -486,12 +512,15 @@ export async function assessQueryQuality(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(QueryAssessmentSchema) },
-      });
+      const response = await getBreaker().execute(() => getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 512,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(QueryAssessmentSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      ));
 
       const durationMs = Date.now() - startTime;
       if (!response.parsed_output) throw new Error('Assessment returned no structured output');
@@ -503,12 +532,13 @@ export async function assessQueryQuality(
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
       return response.parsed_output;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Query assessment failed after ${maxAttempts} attempts: ${errorMessage}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -524,7 +554,7 @@ export async function generateRefinementQuestions(
   missingCriteria: string[],
   logger: Logger
 ): Promise<Array<{ targetsCriterion: string; question: string }>> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildQuestionGeneratorPrompt({ query, missingCriteria });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -535,12 +565,15 @@ export async function generateRefinementQuestions(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(RefinementQuestionsSchema) },
-      });
+      const response = await getBreaker().execute(() => getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 512,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(RefinementQuestionsSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      ));
 
       const durationMs = Date.now() - startTime;
       if (!response.parsed_output) throw new Error('Question generator returned no structured output');
@@ -552,12 +585,13 @@ export async function generateRefinementQuestions(
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
       return response.parsed_output.questions;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Question generation failed after ${maxAttempts} attempts: ${errorMessage}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -573,7 +607,7 @@ export async function rewriteQuery(
   answers: Array<{ question: string; answer: string }>,
   logger: Logger
 ): Promise<string> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildRewriterPrompt({ originalQuery, answers });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -584,11 +618,14 @@ export async function rewriteQuery(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
-      const response = await getClient().messages.create({
-        model: AGENT_MODEL,
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-      });
+      const response = await getBreaker().execute(() => getClient().messages.create(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 512,
+          messages: [{ role: 'user', content: prompt }],
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      ));
 
       const durationMs = Date.now() - startTime;
       const textBlock = response.content[0];
@@ -602,12 +639,13 @@ export async function rewriteQuery(
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
       return text.trim();
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Query rewrite failed after ${maxAttempts} attempts: ${errorMessage}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -623,7 +661,7 @@ export async function generateBriefingWithClaude(
   debateEntries: DebateEntry[],
   logger: Logger
 ): Promise<ExtractedIdea[]> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildSynthesisPrompt({ query, debateEntries });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -639,12 +677,15 @@ export async function generateBriefingWithClaude(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'synthesizer' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(BriefingResponseSchema) },
-      });
+      const response = await getBreaker().execute(() => getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(BriefingResponseSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      ));
 
       const durationMs = Date.now() - startTime;
 
@@ -670,8 +711,9 @@ export async function generateBriefingWithClaude(
 
       return ideas;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -680,7 +722,7 @@ export async function generateBriefingWithClaude(
         throw new Error(`Synthesis Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -697,7 +739,7 @@ export async function translateBriefingWithClaude(
   ideas: ExtractedIdea[],
   logger: Logger
 ): Promise<{ queryPlainLanguage: string; ideas: SimplifiedIdea[] }> {
-  const maxAttempts = 2;
+  const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildTranslationPrompt({ query, ideas });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -713,12 +755,15 @@ export async function translateBriefingWithClaude(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'translation' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(TranslatedBriefingResponseSchema) },
-      });
+      const response = await getBreaker().execute(() => getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(TranslatedBriefingResponseSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      ));
 
       const durationMs = Date.now() - startTime;
 
@@ -744,8 +789,9 @@ export async function translateBriefingWithClaude(
 
       return result;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const willRetry = attempt < maxAttempts;
+      const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
@@ -754,7 +800,7 @@ export async function translateBriefingWithClaude(
         throw new Error(`Translation Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }

@@ -71,25 +71,39 @@ export async function runTournament(config: TournamentConfig): Promise<Tournamen
 
   // Phase 3b: Run skeptic (single call, sees only successful advocates)
   const advocateArgs = successfulAdvocates.map((r) => r.argument!);
-  const challenges = await runSkeptic(query, advocateArgs, log);
+  let challenges: SkepticChallenge[];
+  let skepticFailed = false;
 
-  config.onSkepticComplete?.(challenges.length);
+  try {
+    challenges = await runSkeptic(query, advocateArgs, log);
+    config.onSkepticComplete?.(challenges.length);
+    log.info({ challengeCount: challenges.length }, 'Skeptic complete');
+  } catch (error) {
+    // Skeptic failed — degrade to advocates-only with reduced confidence
+    skepticFailed = true;
+    challenges = [];
+    log.warn(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      'Skeptic agent failed — continuing with advocates only (reduced confidence)'
+    );
+    config.onSkepticComplete?.(0);
+  }
 
-  log.info({ challengeCount: challenges.length }, 'Skeptic complete');
+  // Phase 3c: Run all rebuttals in parallel (skip if skeptic failed — no challenges)
+  let rebuttals: RebuttalResult[] = [];
+  if (!skepticFailed) {
+    rebuttals = await runRebuttals(query, advocateArgs, challenges, log, config.onRebuttalComplete);
 
-  // Phase 3c: Run all rebuttals in parallel
-  const rebuttals = await runRebuttals(query, advocateArgs, challenges, log, config.onRebuttalComplete);
+    const successfulRebuttals = rebuttals.filter((r) => r.success).length;
+    log.info({ total: advocateArgs.length, successful: successfulRebuttals }, 'Rebuttals complete');
 
-  log.info(
-    {
-      total: advocateArgs.length,
-      successful: rebuttals.filter((r) => r.success).length,
-    },
-    'Rebuttals complete'
-  );
+    if (successfulRebuttals === 0 && advocateArgs.length > 0) {
+      log.warn('All rebuttals failed — presenting debate without rebuttals');
+    }
+  }
 
   // Combine into debate entries
-  const debateEntries = combineDebate(advocateArgs, challenges, rebuttals);
+  const debateEntries = combineDebate(advocateArgs, challenges, rebuttals, skepticFailed);
 
   log.info({ entryCount: debateEntries.length }, 'Tournament complete');
 
@@ -247,11 +261,13 @@ async function runRebuttals(
 
 /**
  * Combine all tournament phases into debate entries.
+ * When skepticFailed is true, challenge and rebuttal fields reflect degraded mode.
  */
 function combineDebate(
   advocateArgs: AdvocateArgument[],
   challenges: SkepticChallenge[],
-  rebuttalResults: RebuttalResult[]
+  rebuttalResults: RebuttalResult[],
+  skepticFailed: boolean
 ): DebateEntry[] {
   return advocateArgs.map((arg) => {
     const challenge = challenges.find((c) => c.clusterId === arg.clusterId);
@@ -261,10 +277,14 @@ function combineDebate(
       clusterId: arg.clusterId,
       clusterName: arg.clusterName,
       advocateArgument: arg.argument,
-      skepticChallenge: challenge?.challenge || '[No challenge generated]',
-      rebuttal: rebuttalResult?.success
-        ? rebuttalResult.rebuttal!.rebuttal
-        : `[Rebuttal failed: ${rebuttalResult?.error || 'Unknown error'}]`,
+      skepticChallenge: skepticFailed
+        ? '[Skeptic unavailable — reduced confidence mode]'
+        : (challenge?.challenge || '[No challenge generated]'),
+      rebuttal: skepticFailed
+        ? '[No rebuttal — skeptic unavailable]'
+        : (rebuttalResult?.success
+          ? rebuttalResult.rebuttal!.rebuttal
+          : `[Rebuttal failed: ${rebuttalResult?.error || 'Unknown error'}]`),
     };
   });
 }
