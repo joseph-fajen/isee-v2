@@ -694,7 +694,7 @@ Update this section as work progresses:
 
 ### Dashboard (Week 6)
 - [x] 4.1 Dashboard API
-- [ ] 4.2 Dashboard UI
+- [x] 4.2 Dashboard UI
 
 ### CI/CD & Deployment (Week 7)
 - [ ] 5.1 GitHub Actions

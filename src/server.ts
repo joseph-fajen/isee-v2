@@ -98,6 +98,12 @@ async function routeRequest(req: Request, url: URL, path: string, method: string
     }
   }
 
+  // Serve operations dashboard
+  if (method === 'GET' && (path === '/dashboard' || path === '/dashboard.html')) {
+    const html = await Bun.file('public/dashboard.html').text();
+    return new Response(html, { headers: { 'Content-Type': 'text/html' } });
+  }
+
   // Health check
   if (method === 'GET' && path === '/health') {
     return Response.json({ status: 'ok', timestamp: new Date().toISOString() });
