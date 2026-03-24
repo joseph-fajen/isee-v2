@@ -7,6 +7,10 @@
  * - Returns the briefing when complete
  */
 
+// Initialize tracing BEFORE other imports so instrumentation is in place
+import { initTracing } from './observability/tracing';
+initTracing();
+
 import { runPipeline } from './pipeline';
 import type { AnalyzeRequest, ApiResponse, Briefing, TranslatedBriefing, ProgressEvent, RefinementMetadata } from './types';
 import { assessQuery, getFollowUpQuestions, rewriteUserQuery } from './pipeline/refinement';
