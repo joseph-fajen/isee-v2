@@ -7,6 +7,10 @@
  * - Returns the briefing when complete
  */
 
+// Initialize tracing BEFORE other imports so instrumentation is in place
+import { initTracing } from './observability/tracing';
+initTracing();
+
 import { runPipeline } from './pipeline';
 import type { AnalyzeRequest, ApiResponse, Briefing, TranslatedBriefing, ProgressEvent, RefinementMetadata } from './types';
 import { assessQuery, getFollowUpQuestions, rewriteUserQuery } from './pipeline/refinement';
@@ -15,6 +19,7 @@ import { createApiKey } from './db/api-keys';
 import { applyRateLimit, withRateLimitHeaders } from './security/rate-limit-middleware';
 import { validateQuery } from './security/validation';
 import { handleCORS, handlePreflight } from './security/cors';
+import { generatePrometheusMetrics } from './observability/metrics';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || 'localhost';
@@ -377,6 +382,22 @@ async function routeRequest(req: Request, url: URL, path: string, method: string
         { success: false, error: error instanceof Error ? error.message : 'Failed to create key' },
         { status: 500 }
       );
+    }
+  }
+
+  // Metrics: Prometheus format
+  if (method === 'GET' && path === '/api/metrics') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
+
+    try {
+      const metrics = generatePrometheusMetrics();
+      return new Response(metrics, {
+        headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
+      });
+    } catch (error) {
+      console.error('[server] Metrics error:', error);
+      return new Response('Error generating metrics', { status: 500 });
     }
   }
 

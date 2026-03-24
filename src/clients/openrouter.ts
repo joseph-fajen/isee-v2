@@ -8,6 +8,9 @@
 import OpenAI from 'openai';
 import type { Logger } from '../utils/logger';
 import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/logger';
+import { getTracer } from '../observability/tracing';
+import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';
+import { calculateCost } from '../observability/cost';
 
 // Lazy initialization to avoid errors when env vars not set
 let client: OpenAI | null = null;
@@ -47,6 +50,9 @@ export interface OpenRouterResult {
   model: string;
   durationMs: number;
   tokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  costUsd?: number;
 }
 
 /**
@@ -70,6 +76,15 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
 
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, {
+      provider: 'openrouter',
+      model,
+      framework: context.framework,
+      domain: context.domain,
+      stage: 'synthesis',
+    });
+
     try {
       const completion = await getClient().chat.completions.create({
         model,
@@ -79,8 +94,14 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
 
       const durationMs = Date.now() - startTime;
       const content = completion.choices[0]?.message?.content || '';
+      const inputTokens = completion.usage?.prompt_tokens;
+      const outputTokens = completion.usage?.completion_tokens;
       const tokens = completion.usage?.total_tokens;
+      const costUsd = (inputTokens && outputTokens)
+        ? calculateCost(model, inputTokens, outputTokens)
+        : undefined;
 
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, content.length);
 
       return {
@@ -88,11 +109,15 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
         model,
         durationMs,
         tokens,
+        inputTokens,
+        outputTokens,
+        costUsd,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
 
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
@@ -101,6 +126,8 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
 
       // Brief delay before retry
       await new Promise((resolve) => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
 

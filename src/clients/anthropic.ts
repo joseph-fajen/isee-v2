@@ -11,6 +11,9 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { Logger } from '../utils/logger';
 import type { Domain, Cluster, SkepticChallenge, ExtractedIdea, DebateEntry, SimplifiedIdea } from '../types';
 import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/logger';
+import { getTracer } from '../observability/tracing';
+import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';
+import { calculateCost } from '../observability/cost';
 import {
   buildPrepAgentPrompt,
   buildClusteringPrompt,
@@ -131,6 +134,8 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
 
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'prep' });
 
     try {
       const response = await getClient().messages.parse({
@@ -159,6 +164,12 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
         );
       }
 
+      setLLMResultAttributes(span, {
+        inputTokens: response.usage?.input_tokens,
+        outputTokens: response.usage?.output_tokens,
+        latencyMs: durationMs,
+        success: true,
+      });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(domains).length);
 
       return domains;
@@ -166,6 +177,7 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
 
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
@@ -174,6 +186,8 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
 
       // Brief delay before retry
       await new Promise((resolve) => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
 
@@ -200,6 +214,8 @@ export async function clusterResponsesWithClaude(
 
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'clustering' });
 
     try {
       const response = await getClient().messages.parse({
@@ -225,6 +241,10 @@ export async function clusterResponsesWithClaude(
         );
       }
 
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(clusters).length);
 
       return clusters;
@@ -232,6 +252,7 @@ export async function clusterResponsesWithClaude(
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
 
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
@@ -239,6 +260,8 @@ export async function clusterResponsesWithClaude(
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
 
@@ -267,6 +290,8 @@ export async function generateAdvocateArgument(
 
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'advocate' });
 
     try {
       const response = await getClient().messages.create({
@@ -283,6 +308,10 @@ export async function generateAdvocateArgument(
         throw new Error('Advocate returned empty response');
       }
 
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
 
       return text;
@@ -290,6 +319,7 @@ export async function generateAdvocateArgument(
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
 
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
@@ -297,6 +327,8 @@ export async function generateAdvocateArgument(
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
 
@@ -323,6 +355,8 @@ export async function generateSkepticChallenges(
 
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'skeptic' });
 
     try {
       const response = await getClient().messages.parse({
@@ -340,6 +374,10 @@ export async function generateSkepticChallenges(
 
       const challenges = response.parsed_output.challenges;
 
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(challenges).length);
 
       return challenges;
@@ -347,6 +385,7 @@ export async function generateSkepticChallenges(
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
 
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
@@ -354,6 +393,8 @@ export async function generateSkepticChallenges(
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
 
@@ -382,6 +423,8 @@ export async function generateRebuttal(
 
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'rebuttal' });
 
     try {
       const response = await getClient().messages.create({
@@ -398,6 +441,10 @@ export async function generateRebuttal(
         throw new Error('Rebuttal returned empty response');
       }
 
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
 
       return text;
@@ -405,6 +452,7 @@ export async function generateRebuttal(
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
 
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
@@ -412,6 +460,8 @@ export async function generateRebuttal(
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
 
@@ -432,6 +482,8 @@ export async function assessQueryQuality(
     const callContext = { stage: 'refinement' as const, model: AGENT_MODEL, attempt };
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
       const response = await getClient().messages.parse({
@@ -444,14 +496,21 @@ export async function assessQueryQuality(
       const durationMs = Date.now() - startTime;
       if (!response.parsed_output) throw new Error('Assessment returned no structured output');
 
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
       return response.parsed_output;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Query assessment failed after ${maxAttempts} attempts: ${errorMessage}`);
       await new Promise(resolve => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
   throw new Error('Unexpected: retry loop completed without result');
@@ -472,6 +531,8 @@ export async function generateRefinementQuestions(
     const callContext = { stage: 'refinement' as const, model: AGENT_MODEL, attempt };
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
       const response = await getClient().messages.parse({
@@ -484,14 +545,21 @@ export async function generateRefinementQuestions(
       const durationMs = Date.now() - startTime;
       if (!response.parsed_output) throw new Error('Question generator returned no structured output');
 
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
       return response.parsed_output.questions;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Question generation failed after ${maxAttempts} attempts: ${errorMessage}`);
       await new Promise(resolve => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
   throw new Error('Unexpected: retry loop completed without result');
@@ -512,6 +580,8 @@ export async function rewriteQuery(
     const callContext = { stage: 'refinement' as const, model: AGENT_MODEL, attempt };
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
       const response = await getClient().messages.create({
@@ -525,14 +595,21 @@ export async function rewriteQuery(
       const text = textBlock.type === 'text' ? textBlock.text : '';
       if (!text) throw new Error('Rewriter returned empty response');
 
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
       return text.trim();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Query rewrite failed after ${maxAttempts} attempts: ${errorMessage}`);
       await new Promise(resolve => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
   throw new Error('Unexpected: retry loop completed without result');
@@ -558,6 +635,8 @@ export async function generateBriefingWithClaude(
 
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'synthesizer' });
 
     try {
       const response = await getClient().messages.parse({
@@ -583,6 +662,10 @@ export async function generateBriefingWithClaude(
         );
       }
 
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(ideas).length);
 
       return ideas;
@@ -590,6 +673,7 @@ export async function generateBriefingWithClaude(
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
 
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
@@ -597,6 +681,8 @@ export async function generateBriefingWithClaude(
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
 
@@ -623,6 +709,8 @@ export async function translateBriefingWithClaude(
 
     logLLMCallStart(logger, callContext);
     const startTime = Date.now();
+    const span = getTracer().startSpan('isee.llm.call', { kind: SpanKind.CLIENT });
+    setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'translation' });
 
     try {
       const response = await getClient().messages.parse({
@@ -648,6 +736,10 @@ export async function translateBriefingWithClaude(
         );
       }
 
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(result).length);
 
       return result;
@@ -655,6 +747,7 @@ export async function translateBriefingWithClaude(
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts;
 
+      setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
@@ -662,6 +755,8 @@ export async function translateBriefingWithClaude(
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
+    } finally {
+      span.end();
     }
   }
 

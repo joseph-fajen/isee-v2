@@ -680,11 +680,11 @@ Update this section as work progresses:
 - [x] 1.5 Input validation (PR #18)
 
 ### Observability (Week 3-4)
-- [ ] 2.1 OpenTelemetry setup
-- [ ] 2.2 Trace instrumentation
-- [ ] 2.3 Metrics collection
-- [ ] 2.4 Cost tracking
-- [ ] 2.5 Log correlation
+- [x] 2.1 OpenTelemetry setup
+- [x] 2.2 Trace instrumentation
+- [x] 2.3 Metrics collection
+- [x] 2.4 Cost tracking
+- [x] 2.5 Log correlation
 
 ### Resilience (Week 5)
 - [ ] 3.1 Circuit breaker

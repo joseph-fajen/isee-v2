@@ -131,4 +131,21 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 6,
+    name: 'add_metrics_hourly',
+    sql: `
+      -- Hourly rollups of pipeline and LLM metrics.
+      -- Used for trend analysis and efficient Prometheus export.
+      CREATE TABLE IF NOT EXISTS metrics_hourly (
+        hour         TEXT NOT NULL,  -- ISO-8601 truncated to hour, e.g. '2026-03-24T08:00:00Z'
+        metric_name  TEXT NOT NULL,  -- Prometheus metric name
+        labels_json  TEXT NOT NULL DEFAULT '{}',  -- JSON key-value pairs for labels
+        value        REAL NOT NULL,
+        PRIMARY KEY (hour, metric_name, labels_json)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_metrics_hourly_metric_name ON metrics_hourly (metric_name);
+    `,
+  },
 ];
