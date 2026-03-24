@@ -10,6 +10,8 @@
 import { runPipeline } from './pipeline';
 import type { AnalyzeRequest, ApiResponse, Briefing, TranslatedBriefing, ProgressEvent, RefinementMetadata } from './types';
 import { assessQuery, getFollowUpQuestions, rewriteUserQuery } from './pipeline/refinement';
+import { checkAuth, requireAdmin } from './auth/middleware';
+import { createApiKey } from './db/api-keys';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || 'localhost';
@@ -87,6 +89,9 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // SSE: Stream analysis progress
   if (method === 'GET' && path === '/api/analyze/stream') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
+
     const query = url.searchParams.get('query');
 
     if (!query) {
@@ -172,6 +177,9 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // API: Start analysis
   if (method === 'POST' && path === '/api/analyze') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
+
     try {
       const body = (await req.json()) as AnalyzeRequest;
 
@@ -215,6 +223,8 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // API: Assess query quality
   if (method === 'POST' && path === '/api/refine/assess') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
     try {
       const body = await req.json() as { query: string };
       if (!body.query || typeof body.query !== 'string') {
@@ -250,6 +260,8 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // API: Rewrite query with user's answers
   if (method === 'POST' && path === '/api/refine/rewrite') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
     try {
       const body = await req.json() as {
         originalQuery: string;
@@ -270,6 +282,42 @@ async function handleRequest(req: Request): Promise<Response> {
       console.error('[server] Rewrite error:', error);
       return Response.json(
         { success: false, error: error instanceof Error ? error.message : 'Rewrite failed' },
+        { status: 500 }
+      );
+    }
+  }
+
+  // Admin: Create a new API key
+  if (method === 'POST' && path === '/api/admin/keys') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
+
+    const adminError = requireAdmin(authResult.apiKey);
+    if (adminError) return adminError;
+
+    try {
+      const body = await req.json() as {
+        name?: string;
+        isAdmin?: boolean;
+        expiresAt?: string;
+        rateLimitOverride?: number;
+      };
+
+      const { key, record } = createApiKey({
+        name: typeof body.name === 'string' ? body.name : undefined,
+        isAdmin: body.isAdmin === true,
+        expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : undefined,
+        rateLimitOverride: typeof body.rateLimitOverride === 'number' ? body.rateLimitOverride : undefined,
+      });
+
+      return Response.json({
+        success: true,
+        data: { key, record },
+      }, { status: 201 });
+    } catch (error) {
+      console.error('[server] Admin key creation error:', error);
+      return Response.json(
+        { success: false, error: error instanceof Error ? error.message : 'Failed to create key' },
         { status: 500 }
       );
     }
