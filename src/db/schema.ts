@@ -8,6 +8,7 @@
  *   v1 — initial_schema: runs + briefings tables
  *   v2 — extend_runs: add cost/stats/auth columns and started_at to runs
  *   v3 — add_llm_calls: per-call telemetry table
+ *   v4 — add_api_keys: API key management table
  */
 
 import type { Migration } from './migrations';
@@ -94,6 +95,26 @@ export const migrations: Migration[] = [
       );
 
       CREATE INDEX IF NOT EXISTS idx_llm_calls_run_id ON llm_calls (run_id);
+    `,
+  },
+  {
+    version: 4,
+    name: 'add_api_keys',
+    sql: `
+      -- API keys for authenticating requests to the ISEE API.
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id                   TEXT    PRIMARY KEY,
+        key_hash             TEXT    NOT NULL UNIQUE,  -- SHA-256(key + salt)
+        name                 TEXT,                     -- Optional label
+        created_at           TEXT    NOT NULL,         -- ISO-8601
+        expires_at           TEXT,                     -- NULL = never expires
+        rate_limit_override  INTEGER,                  -- NULL = use global default
+        is_admin             INTEGER NOT NULL DEFAULT 0, -- 1 = admin
+        is_active            INTEGER NOT NULL DEFAULT 1  -- 1 = active
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys (key_hash);
+      CREATE INDEX IF NOT EXISTS idx_api_keys_is_active ON api_keys (is_active);
     `,
   },
 ];

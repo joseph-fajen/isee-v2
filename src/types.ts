@@ -335,6 +335,20 @@ export interface SynthesisModel {
 // ============================================================================
 
 /**
+ * A stored API key record (key_hash is stored, never the raw key).
+ */
+export interface ApiKey {
+  id: string;
+  keyHash: string;
+  name?: string;
+  createdAt: string;
+  expiresAt?: string;
+  rateLimitOverride?: number;
+  isAdmin: boolean;
+  isActive: boolean;
+}
+
+/**
  * Persisted record for a single pipeline execution.
  */
 export interface RunRecord {
