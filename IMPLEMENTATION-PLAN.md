@@ -700,7 +700,7 @@ Update this section as work progresses:
 - [x] 5.1 GitHub Actions
 - [x] 5.2 Golden tests
 - [x] 5.3 Dockerfile
-- [ ] 5.4 Deployment config
+- [x] 5.4 Deployment config
 
 ### Polish (Week 8)
 - [ ] 6.1 Documentation updates
