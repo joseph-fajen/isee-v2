@@ -395,6 +395,38 @@ export interface LlmCallRecord {
 }
 
 // ============================================================================
+// Rate Limiting Types
+// ============================================================================
+
+/**
+ * Configuration for a rate limit bucket.
+ */
+export interface RateLimitConfig {
+  /** Maximum tokens (requests) allowed per window */
+  limit: number;
+  /** Window duration in seconds */
+  windowSeconds: number;
+  /** Maximum burst tokens (initial fill and cap) */
+  burst: number;
+}
+
+/**
+ * Result of a rate limit check or token consumption.
+ */
+export interface RateLimitStatus {
+  /** Whether the request is allowed */
+  allowed: boolean;
+  /** Maximum requests allowed in the window */
+  limit: number;
+  /** Remaining requests in the current window */
+  remaining: number;
+  /** ISO timestamp when the bucket resets to full */
+  resetAt: string;
+  /** Seconds until the client may retry (only present when allowed=false) */
+  retryAfterSeconds?: number;
+}
+
+// ============================================================================
 // API Response Types
 // ============================================================================
 

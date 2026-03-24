@@ -12,6 +12,7 @@ import type { AnalyzeRequest, ApiResponse, Briefing, TranslatedBriefing, Progres
 import { assessQuery, getFollowUpQuestions, rewriteUserQuery } from './pipeline/refinement';
 import { checkAuth, requireAdmin } from './auth/middleware';
 import { createApiKey } from './db/api-keys';
+import { applyRateLimit, withRateLimitHeaders } from './security/rate-limit-middleware';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || 'localhost';
@@ -92,6 +93,9 @@ async function handleRequest(req: Request): Promise<Response> {
     const authResult = checkAuth(req);
     if (!authResult.ok) return authResult.response;
 
+    const rateLimitResult = applyRateLimit(req, authResult);
+    if (rateLimitResult.limited) return rateLimitResult.response;
+
     const query = url.searchParams.get('query');
 
     if (!query) {
@@ -165,20 +169,26 @@ async function handleRequest(req: Request): Promise<Response> {
       },
     });
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no',
-      },
-    });
+    const sseHeaders: Record<string, string> = {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'X-RateLimit-Limit': String(rateLimitResult.status.limit),
+      'X-RateLimit-Remaining': String(rateLimitResult.status.remaining),
+      'X-RateLimit-Reset': String(Math.floor(new Date(rateLimitResult.status.resetAt).getTime() / 1000)),
+    };
+
+    return new Response(stream, { headers: sseHeaders });
   }
 
   // API: Start analysis
   if (method === 'POST' && path === '/api/analyze') {
     const authResult = checkAuth(req);
     if (!authResult.ok) return authResult.response;
+
+    const rateLimitResult = applyRateLimit(req, authResult);
+    if (rateLimitResult.limited) return rateLimitResult.response;
 
     try {
       const body = (await req.json()) as AnalyzeRequest;
@@ -201,14 +211,17 @@ async function handleRequest(req: Request): Promise<Response> {
       await Bun.write(filename, result.markdown);
       console.log(`[server] Saved briefing to: ${filename}`);
 
-      return Response.json({
-        success: true,
-        data: {
-          briefing: result.briefing,
-          translatedBriefing: result.translatedBriefing,
-          markdown: result.markdown,
-        },
-      } as ApiResponse<{ briefing: Briefing; translatedBriefing: TranslatedBriefing; markdown: string }>);
+      return withRateLimitHeaders(
+        Response.json({
+          success: true,
+          data: {
+            briefing: result.briefing,
+            translatedBriefing: result.translatedBriefing,
+            markdown: result.markdown,
+          },
+        } as ApiResponse<{ briefing: Briefing; translatedBriefing: TranslatedBriefing; markdown: string }>),
+        rateLimitResult.status
+      );
     } catch (error) {
       console.error('[server] Analysis error:', error);
       return Response.json(
