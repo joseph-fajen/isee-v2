@@ -746,7 +746,8 @@
           const icon = run.status === 'completed' ? '✓' : run.status === 'failed' ? '✗' : '◌';
           const color = run.status === 'completed' ? 'var(--success)' : run.status === 'failed' ? 'var(--error)' : 'var(--text-secondary)';
           const time = run.startedAt ? new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-          const query = (run.refinedQuery || run.query).substring(0, 50) + (run.query.length > 50 ? '…' : '');
+          const rawQuery = decodeHtml(run.refinedQuery || run.query);
+          const query = rawQuery.substring(0, 50) + (rawQuery.length > 50 ? '…' : '');
           const err = run.errorMessage ? `<div class="run-error">${escHtml(run.errorMessage.substring(0, 60))}</div>` : '';
           return `<li class="run-item">
             <span class="run-status" style="color:${color}">${icon}</span>
@@ -939,6 +940,11 @@
 
     function escHtml(str) {
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function decodeHtml(str) {
+      const doc = new DOMParser().parseFromString(str, 'text/html');
+      return doc.documentElement.textContent || str;
     }
   </script>
 </body>
