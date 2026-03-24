@@ -13,6 +13,7 @@ import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observabi
 import { calculateCost } from '../observability/cost';
 import { DEFAULT_RETRY_CONFIG, isRetryableError, calculateDelay } from '../resilience/retry';
 import { TIMEOUTS, createTimeoutSignal } from '../resilience/timeout';
+import { getCircuitBreaker, CircuitOpenError } from '../resilience/circuit-breaker';
 
 // Lazy initialization to avoid errors when env vars not set
 let client: OpenAI | null = null;
@@ -58,12 +59,13 @@ export interface OpenRouterResult {
 }
 
 /**
- * Call an OpenRouter model with retry logic.
- * Retries once on failure before throwing.
+ * Call an OpenRouter model with retry logic and circuit breaker protection.
+ * Throws CircuitOpenError immediately if the OpenRouter circuit is open.
  */
 export async function callOpenRouter(options: OpenRouterCallOptions): Promise<OpenRouterResult> {
   const { model, prompt, maxTokens = 1500, logger, context } = options;
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
+  const breaker = getCircuitBreaker('openrouter');
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const callContext = {
@@ -88,14 +90,14 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
     });
 
     try {
-      const completion = await getClient().chat.completions.create(
+      const completion = await breaker.execute(() => getClient().chat.completions.create(
         {
           model,
           max_tokens: maxTokens,
           messages: [{ role: 'user', content: prompt }],
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
       const content = completion.choices[0]?.message?.content || '';
@@ -119,13 +121,19 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
         costUsd,
       };
     } catch (error) {
+      // Re-throw circuit open errors immediately — no retry, preserve type for caller
+      if (error instanceof CircuitOpenError) {
+        span.end();
+        throw error;
+      }
+
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
 
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
-      if (!willRetry || !isRetryableError(error)) {
+      if (!willRetry) {
         throw new Error(`OpenRouter call failed after ${attempt} attempt(s): ${errorMessage}`);
       }
 

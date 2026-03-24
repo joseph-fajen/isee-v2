@@ -16,6 +16,7 @@ import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observabi
 import { calculateCost } from '../observability/cost';
 import { DEFAULT_RETRY_CONFIG, isRetryableError, calculateDelay } from '../resilience/retry';
 import { TIMEOUTS, createTimeoutSignal } from '../resilience/timeout';
+import { getCircuitBreaker, CircuitOpenError } from '../resilience/circuit-breaker';
 import {
   buildPrepAgentPrompt,
   buildClusteringPrompt,
@@ -120,6 +121,9 @@ const RefinementQuestionsSchema = z.object({
 // Must be a model that supports structured outputs (claude-sonnet-4-5, claude-sonnet-4-6, etc.)
 const AGENT_MODEL = 'claude-sonnet-4-5';
 
+// Circuit breaker for all Anthropic API calls
+const getBreaker = () => getCircuitBreaker('anthropic');
+
 /**
  * Generate knowledge domains for a query using structured output.
  */
@@ -140,7 +144,7 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'prep' });
 
     try {
-      const response = await getClient().messages.parse(
+      const response = await getBreaker().execute(() => getClient().messages.parse(
         {
           model: AGENT_MODEL,
           max_tokens: 1024,
@@ -148,7 +152,7 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
           output_config: { format: zodOutputFormat(DomainsResponseSchema) },
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
 
@@ -179,6 +183,7 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
 
       return domains;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
 
@@ -223,7 +228,7 @@ export async function clusterResponsesWithClaude(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'clustering' });
 
     try {
-      const response = await getClient().messages.parse(
+      const response = await getBreaker().execute(() => getClient().messages.parse(
         {
           model: AGENT_MODEL,
           max_tokens: 4096,
@@ -231,7 +236,7 @@ export async function clusterResponsesWithClaude(
           output_config: { format: zodOutputFormat(ClusteringResponseSchema) },
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
 
@@ -257,6 +262,7 @@ export async function clusterResponsesWithClaude(
 
       return clusters;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
 
@@ -302,14 +308,14 @@ export async function generateAdvocateArgument(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'advocate' });
 
     try {
-      const response = await getClient().messages.create(
+      const response = await getBreaker().execute(() => getClient().messages.create(
         {
           model: AGENT_MODEL,
           max_tokens: 1024,
           messages: [{ role: 'user', content: prompt }],
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
       const textBlock = response.content[0];
@@ -327,6 +333,7 @@ export async function generateAdvocateArgument(
 
       return text;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
 
@@ -370,7 +377,7 @@ export async function generateSkepticChallenges(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'skeptic' });
 
     try {
-      const response = await getClient().messages.parse(
+      const response = await getBreaker().execute(() => getClient().messages.parse(
         {
           model: AGENT_MODEL,
           max_tokens: 4096,
@@ -378,7 +385,7 @@ export async function generateSkepticChallenges(
           output_config: { format: zodOutputFormat(SkepticChallengesResponseSchema) },
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
 
@@ -396,6 +403,7 @@ export async function generateSkepticChallenges(
 
       return challenges;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
 
@@ -441,14 +449,14 @@ export async function generateRebuttal(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'rebuttal' });
 
     try {
-      const response = await getClient().messages.create(
+      const response = await getBreaker().execute(() => getClient().messages.create(
         {
           model: AGENT_MODEL,
           max_tokens: 1024,
           messages: [{ role: 'user', content: prompt }],
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
       const textBlock = response.content[0];
@@ -466,6 +474,7 @@ export async function generateRebuttal(
 
       return text;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
 
@@ -503,7 +512,7 @@ export async function assessQueryQuality(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
-      const response = await getClient().messages.parse(
+      const response = await getBreaker().execute(() => getClient().messages.parse(
         {
           model: AGENT_MODEL,
           max_tokens: 512,
@@ -511,7 +520,7 @@ export async function assessQueryQuality(
           output_config: { format: zodOutputFormat(QueryAssessmentSchema) },
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
       if (!response.parsed_output) throw new Error('Assessment returned no structured output');
@@ -523,6 +532,7 @@ export async function assessQueryQuality(
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
       return response.parsed_output;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
@@ -555,7 +565,7 @@ export async function generateRefinementQuestions(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
-      const response = await getClient().messages.parse(
+      const response = await getBreaker().execute(() => getClient().messages.parse(
         {
           model: AGENT_MODEL,
           max_tokens: 512,
@@ -563,7 +573,7 @@ export async function generateRefinementQuestions(
           output_config: { format: zodOutputFormat(RefinementQuestionsSchema) },
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
       if (!response.parsed_output) throw new Error('Question generator returned no structured output');
@@ -575,6 +585,7 @@ export async function generateRefinementQuestions(
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
       return response.parsed_output.questions;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
@@ -607,14 +618,14 @@ export async function rewriteQuery(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
-      const response = await getClient().messages.create(
+      const response = await getBreaker().execute(() => getClient().messages.create(
         {
           model: AGENT_MODEL,
           max_tokens: 512,
           messages: [{ role: 'user', content: prompt }],
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
       const textBlock = response.content[0];
@@ -628,6 +639,7 @@ export async function rewriteQuery(
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
       return text.trim();
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
@@ -665,7 +677,7 @@ export async function generateBriefingWithClaude(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'synthesizer' });
 
     try {
-      const response = await getClient().messages.parse(
+      const response = await getBreaker().execute(() => getClient().messages.parse(
         {
           model: AGENT_MODEL,
           max_tokens: 4096,
@@ -673,7 +685,7 @@ export async function generateBriefingWithClaude(
           output_config: { format: zodOutputFormat(BriefingResponseSchema) },
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
 
@@ -699,6 +711,7 @@ export async function generateBriefingWithClaude(
 
       return ideas;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
 
@@ -742,7 +755,7 @@ export async function translateBriefingWithClaude(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'translation' });
 
     try {
-      const response = await getClient().messages.parse(
+      const response = await getBreaker().execute(() => getClient().messages.parse(
         {
           model: AGENT_MODEL,
           max_tokens: 4096,
@@ -750,7 +763,7 @@ export async function translateBriefingWithClaude(
           output_config: { format: zodOutputFormat(TranslatedBriefingResponseSchema) },
         },
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      );
+      ));
 
       const durationMs = Date.now() - startTime;
 
@@ -776,6 +789,7 @@ export async function translateBriefingWithClaude(
 
       return result;
     } catch (error) {
+      if (error instanceof CircuitOpenError) throw error;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const willRetry = attempt < maxAttempts && isRetryableError(error);
 
