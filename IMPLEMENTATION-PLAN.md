@@ -688,7 +688,7 @@ Update this section as work progresses:
 
 ### Resilience (Week 5)
 - [ ] 3.1 Circuit breaker
-- [ ] 3.2 Retry logic
+- [x] 3.2 Retry logic
 - [ ] 3.3 Timeout configuration
 - [ ] 3.4 Graceful degradation
 

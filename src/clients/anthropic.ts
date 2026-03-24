@@ -15,6 +15,7 @@ import { getTracer } from '../observability/tracing';
 import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';
 import { calculateCost } from '../observability/cost';
 import { DEFAULT_RETRY_CONFIG, isRetryableError, calculateDelay } from '../resilience/retry';
+import { TIMEOUTS, createTimeoutSignal } from '../resilience/timeout';
 import {
   buildPrepAgentPrompt,
   buildClusteringPrompt,
@@ -139,12 +140,15 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'prep' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(DomainsResponseSchema) },
-      });
+      const response = await getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(DomainsResponseSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
 
@@ -219,12 +223,15 @@ export async function clusterResponsesWithClaude(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'clustering' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(ClusteringResponseSchema) },
-      });
+      const response = await getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(ClusteringResponseSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
 
@@ -295,11 +302,14 @@ export async function generateAdvocateArgument(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'advocate' });
 
     try {
-      const response = await getClient().messages.create({
-        model: AGENT_MODEL,
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }],
-      });
+      const response = await getClient().messages.create(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }],
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
       const textBlock = response.content[0];
@@ -360,12 +370,15 @@ export async function generateSkepticChallenges(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'skeptic' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(SkepticChallengesResponseSchema) },
-      });
+      const response = await getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(SkepticChallengesResponseSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
 
@@ -428,11 +441,14 @@ export async function generateRebuttal(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'rebuttal' });
 
     try {
-      const response = await getClient().messages.create({
-        model: AGENT_MODEL,
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }],
-      });
+      const response = await getClient().messages.create(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }],
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
       const textBlock = response.content[0];
@@ -487,12 +503,15 @@ export async function assessQueryQuality(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(QueryAssessmentSchema) },
-      });
+      const response = await getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 512,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(QueryAssessmentSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
       if (!response.parsed_output) throw new Error('Assessment returned no structured output');
@@ -509,7 +528,7 @@ export async function assessQueryQuality(
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Query assessment failed after ${maxAttempts} attempts: ${errorMessage}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -536,12 +555,15 @@ export async function generateRefinementQuestions(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(RefinementQuestionsSchema) },
-      });
+      const response = await getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 512,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(RefinementQuestionsSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
       if (!response.parsed_output) throw new Error('Question generator returned no structured output');
@@ -558,7 +580,7 @@ export async function generateRefinementQuestions(
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Question generation failed after ${maxAttempts} attempts: ${errorMessage}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -585,11 +607,14 @@ export async function rewriteQuery(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'refinement' });
 
     try {
-      const response = await getClient().messages.create({
-        model: AGENT_MODEL,
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-      });
+      const response = await getClient().messages.create(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 512,
+          messages: [{ role: 'user', content: prompt }],
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
       const textBlock = response.content[0];
@@ -608,7 +633,7 @@ export async function rewriteQuery(
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
       if (!willRetry) throw new Error(`Query rewrite failed after ${maxAttempts} attempts: ${errorMessage}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
     }
@@ -640,12 +665,15 @@ export async function generateBriefingWithClaude(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'synthesizer' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(BriefingResponseSchema) },
-      });
+      const response = await getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(BriefingResponseSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
 
@@ -714,12 +742,15 @@ export async function translateBriefingWithClaude(
     setLLMAttributes(span, { provider: 'anthropic', model: AGENT_MODEL, stage: 'translation' });
 
     try {
-      const response = await getClient().messages.parse({
-        model: AGENT_MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
-        output_config: { format: zodOutputFormat(TranslatedBriefingResponseSchema) },
-      });
+      const response = await getClient().messages.parse(
+        {
+          model: AGENT_MODEL,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+          output_config: { format: zodOutputFormat(TranslatedBriefingResponseSchema) },
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
 

@@ -20,6 +20,7 @@ import { translateBriefing } from './pipeline/translation';
 import { createRunLogger } from './utils/logger';
 import { withSpan } from './observability/spans';
 import { getTracer } from './observability/tracing';
+import { withTimeout, TIMEOUTS } from './resilience/timeout';
 
 export interface PipelineResult {
   briefing: Briefing;
@@ -82,7 +83,8 @@ export async function runPipeline(
     log(`[${stage}] ${status}: ${message}`);
   };
 
-  return withSpan(
+  return withTimeout(
+    () => withSpan(
     'isee.pipeline.run',
     async (rootSpan) => {
       rootSpan.setAttribute('pipeline.run_id', runId);
@@ -116,19 +118,22 @@ export async function runPipeline(
 
       const responses = await withSpan('isee.stage.synthesis', async (span) => {
         span.setAttribute('synthesis.domain_count', domains.length);
-        return generateSynthesisMatrix(
-          { query, domains, concurrencyLimit, runLogger },
-          (current, total) => {
-            emit('synthesis', 'progress', `${current}/${total} calls completed`, { progress: { current, total } });
-          },
-          (detail) => {
-            emit('synthesis', 'progress', `${detail.modelId} + ${detail.frameworkId}`, {
-              detail: {
-                type: 'response',
-                ...detail,
-              },
-            });
-          }
+        return withTimeout(
+          () => generateSynthesisMatrix(
+            { query, domains, concurrencyLimit, runLogger },
+            (current, total) => {
+              emit('synthesis', 'progress', `${current}/${total} calls completed`, { progress: { current, total } });
+            },
+            (detail) => {
+              emit('synthesis', 'progress', `${detail.modelId} + ${detail.frameworkId}`, {
+                detail: {
+                  type: 'response',
+                  ...detail,
+                },
+              });
+            }
+          ),
+          TIMEOUTS.SYNTHESIS_STAGE_MS
         );
       }, { tracer });
 
@@ -308,6 +313,8 @@ export async function runPipeline(
       return { briefing, translatedBriefing, markdown };
     },
     { tracer, attributes: { 'pipeline.run_id': runId } }
+  ),
+    TIMEOUTS.FULL_PIPELINE_MS
   );
 }
 

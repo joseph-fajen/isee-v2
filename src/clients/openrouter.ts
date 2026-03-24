@@ -12,6 +12,7 @@ import { getTracer } from '../observability/tracing';
 import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';
 import { calculateCost } from '../observability/cost';
 import { DEFAULT_RETRY_CONFIG, isRetryableError, calculateDelay } from '../resilience/retry';
+import { TIMEOUTS, createTimeoutSignal } from '../resilience/timeout';
 
 // Lazy initialization to avoid errors when env vars not set
 let client: OpenAI | null = null;
@@ -87,11 +88,14 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
     });
 
     try {
-      const completion = await getClient().chat.completions.create({
-        model,
-        max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }],
-      });
+      const completion = await getClient().chat.completions.create(
+        {
+          model,
+          max_tokens: maxTokens,
+          messages: [{ role: 'user', content: prompt }],
+        },
+        { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
+      );
 
       const durationMs = Date.now() - startTime;
       const content = completion.choices[0]?.message?.content || '';
