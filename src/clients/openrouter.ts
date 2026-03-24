@@ -10,6 +10,7 @@ import type { Logger } from '../utils/logger';
 import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/logger';
 import { getTracer } from '../observability/tracing';
 import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';
+import { calculateCost } from '../observability/cost';
 
 // Lazy initialization to avoid errors when env vars not set
 let client: OpenAI | null = null;
@@ -51,6 +52,7 @@ export interface OpenRouterResult {
   tokens?: number;
   inputTokens?: number;
   outputTokens?: number;
+  costUsd?: number;
 }
 
 /**
@@ -95,8 +97,11 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
       const inputTokens = completion.usage?.prompt_tokens;
       const outputTokens = completion.usage?.completion_tokens;
       const tokens = completion.usage?.total_tokens;
+      const costUsd = (inputTokens && outputTokens)
+        ? calculateCost(model, inputTokens, outputTokens)
+        : undefined;
 
-      setLLMResultAttributes(span, { inputTokens, outputTokens, latencyMs: durationMs, success: true });
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, content.length);
 
       return {
@@ -106,6 +111,7 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
         tokens,
         inputTokens,
         outputTokens,
+        costUsd,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

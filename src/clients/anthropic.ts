@@ -13,6 +13,7 @@ import type { Domain, Cluster, SkepticChallenge, ExtractedIdea, DebateEntry, Sim
 import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/logger';
 import { getTracer } from '../observability/tracing';
 import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';
+import { calculateCost } from '../observability/cost';
 import {
   buildPrepAgentPrompt,
   buildClusteringPrompt,
@@ -240,7 +241,10 @@ export async function clusterResponsesWithClaude(
         );
       }
 
-      setLLMResultAttributes(span, { inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, latencyMs: durationMs, success: true });
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(clusters).length);
 
       return clusters;
@@ -304,7 +308,10 @@ export async function generateAdvocateArgument(
         throw new Error('Advocate returned empty response');
       }
 
-      setLLMResultAttributes(span, { inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, latencyMs: durationMs, success: true });
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
 
       return text;
@@ -367,7 +374,10 @@ export async function generateSkepticChallenges(
 
       const challenges = response.parsed_output.challenges;
 
-      setLLMResultAttributes(span, { inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, latencyMs: durationMs, success: true });
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(challenges).length);
 
       return challenges;
@@ -431,7 +441,10 @@ export async function generateRebuttal(
         throw new Error('Rebuttal returned empty response');
       }
 
-      setLLMResultAttributes(span, { inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, latencyMs: durationMs, success: true });
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
 
       return text;
@@ -483,7 +496,10 @@ export async function assessQueryQuality(
       const durationMs = Date.now() - startTime;
       if (!response.parsed_output) throw new Error('Assessment returned no structured output');
 
-      setLLMResultAttributes(span, { inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, latencyMs: durationMs, success: true });
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
       return response.parsed_output;
     } catch (error) {
@@ -529,7 +545,10 @@ export async function generateRefinementQuestions(
       const durationMs = Date.now() - startTime;
       if (!response.parsed_output) throw new Error('Question generator returned no structured output');
 
-      setLLMResultAttributes(span, { inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, latencyMs: durationMs, success: true });
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
       return response.parsed_output.questions;
     } catch (error) {
@@ -576,7 +595,10 @@ export async function rewriteQuery(
       const text = textBlock.type === 'text' ? textBlock.text : '';
       if (!text) throw new Error('Rewriter returned empty response');
 
-      setLLMResultAttributes(span, { inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, latencyMs: durationMs, success: true });
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
       return text.trim();
     } catch (error) {
@@ -640,7 +662,10 @@ export async function generateBriefingWithClaude(
         );
       }
 
-      setLLMResultAttributes(span, { inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, latencyMs: durationMs, success: true });
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(ideas).length);
 
       return ideas;
@@ -711,7 +736,10 @@ export async function translateBriefingWithClaude(
         );
       }
 
-      setLLMResultAttributes(span, { inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, latencyMs: durationMs, success: true });
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(result).length);
 
       return result;
