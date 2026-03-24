@@ -23,7 +23,7 @@ jobs:
         run: bun run lint
 
       - name: Unit tests
-        run: bun test
+        run: bun test src/
 
       - name: Build check
         run: bun build src/server.ts --outdir=dist
