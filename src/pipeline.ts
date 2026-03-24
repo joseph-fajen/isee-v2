@@ -21,6 +21,7 @@ import { createRunLogger } from './utils/logger';
 import { withSpan } from './observability/spans';
 import { getTracer } from './observability/tracing';
 import { withTimeout, TIMEOUTS } from './resilience/timeout';
+import { createRun, updateRun } from './db';
 
 export interface PipelineResult {
   briefing: Briefing;
@@ -45,6 +46,9 @@ export async function runPipeline(
   const runId = crypto.randomUUID();
   const runLogger = createRunLogger(runId);
   const tracer = getTracer();
+
+  // Persist run to database
+  createRun({ id: runId, query, startedAt: new Date().toISOString() });
 
   runLogger.info({ query: query.substring(0, 100) }, 'Pipeline starting');
 
@@ -309,6 +313,16 @@ export async function runPipeline(
 
       // Render markdown
       const markdown = renderBriefingMarkdown(translatedBriefing);
+
+      // Update run record with final stats
+      updateRun(runId, {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        durationMs: briefing.stats.totalDurationMs,
+        synthesisCallCount: briefing.stats.synthesisCallCount,
+        successfulCalls: briefing.stats.successfulCalls,
+        clusterCount: briefing.stats.clusterCount,
+      });
 
       return { briefing, translatedBriefing, markdown };
     },

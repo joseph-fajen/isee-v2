@@ -9,8 +9,8 @@
 export const TIMEOUTS = {
   /** Individual LLM call — most complete in 5-15s */
   LLM_CALL_MS: 60_000,
-  /** Synthesis stage — ~60 parallel calls */
-  SYNTHESIS_STAGE_MS: 180_000,
+  /** Synthesis stage — ~60 parallel calls, can take 3-4 minutes */
+  SYNTHESIS_STAGE_MS: 300_000,
   /** Full pipeline — 5 minutes max */
   FULL_PIPELINE_MS: 300_000,
   /** SSE connection — allow for full pipeline + buffer */

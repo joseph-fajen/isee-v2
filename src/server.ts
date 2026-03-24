@@ -11,6 +11,10 @@
 import { initTracing } from './observability/tracing';
 initTracing();
 
+// Initialize database (runs migrations)
+import { initDatabase } from './db';
+initDatabase();
+
 import { runPipeline } from './pipeline';
 import type { AnalyzeRequest, ApiResponse, Briefing, TranslatedBriefing, ProgressEvent, RefinementMetadata } from './types';
 import { assessQuery, getFollowUpQuestions, rewriteUserQuery } from './pipeline/refinement';
