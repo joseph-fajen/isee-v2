@@ -1,0 +1,65 @@
+# ISEE Validation Workflow
+# Usage: archon workflow run isee-validate
+
+name: isee-validate
+description: Run all validation checks on the ISEE codebase
+
+steps:
+  - command: typecheck
+    prompt: |
+      Run TypeScript type checking:
+
+      ```bash
+      bun run typecheck
+      ```
+
+      Report any type errors found. If there are errors, list them clearly
+      with file paths and line numbers.
+
+  - command: lint
+    prompt: |
+      Run linting:
+
+      ```bash
+      bun run lint
+      ```
+
+      Report any lint errors or warnings. If there are errors, list them clearly.
+
+  - command: test
+    prompt: |
+      Run the test suite:
+
+      ```bash
+      bun test
+      ```
+
+      Report the test results:
+      - Number of tests passed
+      - Number of tests failed
+      - Any error messages from failed tests
+
+  - command: build-check
+    prompt: |
+      Verify the server can start:
+
+      ```bash
+      # Try to build/bundle
+      bun build src/server.ts --outdir=dist --target=bun
+      ```
+
+      Report if the build succeeds or fails.
+
+  - command: summary
+    clearContext: true
+    prompt: |
+      Summarize the validation results from the previous steps.
+
+      Create a validation report with:
+      - Overall status (PASS / FAIL)
+      - TypeScript: PASS/FAIL (X errors)
+      - Lint: PASS/FAIL (X errors, Y warnings)
+      - Tests: PASS/FAIL (X passed, Y failed)
+      - Build: PASS/FAIL
+
+      If any checks failed, list the top issues that need to be fixed.

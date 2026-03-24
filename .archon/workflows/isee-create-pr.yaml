@@ -1,0 +1,77 @@
+# ISEE PR Creation Workflow
+# Usage: archon workflow run isee-create-pr --branch <branch> "<PR title>"
+
+name: isee-create-pr
+description: Create a pull request with validation and review checklist
+
+steps:
+  # Step 1: Validate before PR
+  - command: validate
+    prompt: |
+      Before creating a PR, run all validation checks:
+
+      1. `bun run typecheck` — TypeScript must compile
+      2. `bun run lint` — No lint errors
+      3. `bun test` — All tests must pass
+
+      If any checks fail, report the failures and STOP.
+      Do not proceed to PR creation if validation fails.
+
+  # Step 2: Analyze changes
+  - command: analyze
+    clearContext: true
+    prompt: |
+      Analyze the changes on this branch:
+
+      1. Run `git log main..HEAD --oneline` to see commits
+      2. Run `git diff main --stat` to see changed files
+      3. Identify the main changes and their purpose
+
+      Summarize:
+      - What was implemented
+      - Which specification sections this addresses
+      - Any notable implementation decisions
+
+  # Step 3: Push and create PR
+  - command: create-pr
+    clearContext: true
+    prompt: |
+      Create a pull request for this branch.
+
+      Based on the analysis from the previous step, create a PR with:
+
+      1. Push the branch to origin:
+         ```bash
+         git push -u origin HEAD
+         ```
+
+      2. Create the PR using GitHub CLI:
+         ```bash
+         gh pr create --title "$ARGUMENTS" --body "$(cat <<'EOF'
+         ## Summary
+         [Brief description of what this PR implements]
+
+         ## Specification Reference
+         - PRODUCTION-LAYER-SPEC.md Section X.X
+
+         ## Changes
+         - [List of main changes]
+
+         ## Validation
+         - [x] TypeScript compiles
+         - [x] Lint passes
+         - [x] Tests pass
+
+         ## Testing Done
+         [Description of how this was tested]
+
+         ## Review Checklist
+         - [ ] Code follows existing patterns
+         - [ ] Error handling is appropriate
+         - [ ] Types are properly defined
+         - [ ] Documentation updated if needed
+         EOF
+         )"
+         ```
+
+      Report the PR URL when complete.

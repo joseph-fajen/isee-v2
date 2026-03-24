@@ -1,0 +1,63 @@
+# ISEE Fix Review Feedback Workflow
+# Usage: archon workflow run isee-fix-review "<review feedback or PR number>"
+
+name: isee-fix-review
+description: Address code review feedback on a PR
+
+steps:
+  # Step 1: Understand feedback
+  - command: understand
+    prompt: |
+      Understand the review feedback that needs to be addressed.
+
+      ## Feedback
+      $ARGUMENTS
+
+      If a PR number was provided, fetch the PR comments:
+      ```bash
+      gh pr view <number> --comments
+      ```
+
+      List each piece of feedback that needs to be addressed.
+
+  # Step 2: Fix issues
+  - command: fix
+    clearContext: true
+    prompt: |
+      Address the review feedback:
+
+      $ARGUMENTS
+
+      For each issue:
+      1. Locate the relevant code
+      2. Make the necessary changes
+      3. Ensure the fix is complete
+
+      Work through all feedback items.
+
+  # Step 3: Validate
+  - command: validate
+    clearContext: true
+    prompt: |
+      After making fixes, validate:
+
+      1. `bun run typecheck`
+      2. `bun run lint`
+      3. `bun test`
+
+      Fix any new issues introduced.
+
+  # Step 4: Commit and push
+  - command: commit-push
+    clearContext: true
+    prompt: |
+      Commit the fixes:
+
+      1. Stage the changed files
+      2. Create a commit with message: "fix: address review feedback"
+      3. Push to the branch:
+         ```bash
+         git push
+         ```
+
+      The PR will automatically update.

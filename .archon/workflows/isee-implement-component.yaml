@@ -1,0 +1,101 @@
+# ISEE Component Implementation Workflow
+# Usage: archon workflow run isee-implement-component --branch <branch> "<task description>"
+
+name: isee-implement-component
+description: Implement a single production layer component with validation
+
+steps:
+  # Step 1: Understand the task and create a plan
+  - command: plan
+    prompt: |
+      You are implementing a component for ISEE v2's Production Layer.
+
+      ## Task
+      $ARGUMENTS
+
+      ## Context
+      Read these files to understand the requirements:
+      - PRODUCTION-LAYER-SPEC.md (full specification)
+      - IMPLEMENTATION-PLAN.md (task breakdown and requirements)
+      - src/types.ts (existing type definitions)
+
+      ## Your Mission
+      1. Read the specification sections relevant to this task
+      2. Understand the existing codebase structure
+      3. Create a detailed implementation plan
+
+      Output a numbered list of specific files to create/modify and what each should contain.
+
+  # Step 2: Implement the code
+  - command: implement
+    clearContext: true
+    prompt: |
+      You are implementing a component for ISEE v2's Production Layer.
+
+      ## Task
+      $ARGUMENTS
+
+      ## Plan
+      $PLAN
+
+      ## Implementation Guidelines
+      - Follow existing code patterns in the codebase
+      - Use TypeScript strict mode conventions
+      - Add appropriate error handling
+      - Include JSDoc comments for public functions
+      - Follow the file structure from PRODUCTION-LAYER-SPEC.md Appendix B
+
+      ## Reference Files
+      - PRODUCTION-LAYER-SPEC.md for specifications
+      - src/types.ts for type definitions
+      - src/server.ts for server patterns
+      - src/pipeline.ts for pipeline patterns
+
+      Implement the component according to the plan.
+
+  # Step 3: Create tests if applicable
+  - command: test
+    clearContext: true
+    prompt: |
+      You have implemented a component for ISEE v2.
+
+      ## Task
+      $ARGUMENTS
+
+      ## Your Mission
+      1. Review what was implemented in the previous step
+      2. Create appropriate unit tests if the component warrants testing
+      3. Tests should go in a `test/` directory or alongside the source file
+      4. Use Bun's test framework (`bun:test`)
+
+      If tests aren't applicable for this component (e.g., configuration files),
+      explain why and skip test creation.
+
+  # Step 4: Validate
+  - command: validate
+    clearContext: true
+    prompt: |
+      Run validation checks on the implementation:
+
+      1. Run `bun run typecheck` to verify TypeScript compiles
+      2. Run `bun run lint` to check for lint errors (if configured)
+      3. Run `bun test` to run any tests
+
+      If there are errors, fix them.
+      Report the final status of all checks.
+
+  # Step 5: Commit
+  - command: commit
+    clearContext: true
+    prompt: |
+      The implementation is complete and validated.
+
+      Create a git commit with:
+      - A clear commit message following conventional commits format
+      - feat: for new features
+      - fix: for bug fixes
+      - refactor: for refactoring
+      - docs: for documentation
+
+      Stage all relevant files and commit.
+      Do NOT push yet.

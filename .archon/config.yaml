@@ -1,0 +1,20 @@
+# ISEE v2 Archon Configuration
+# See: https://github.com/dynamous-community/remote-coding-agent
+
+assistants:
+  claude:
+    model: sonnet  # Use Claude Sonnet for implementation tasks
+
+defaults:
+  loadDefaultCommands: true
+  loadDefaultWorkflows: true
+
+# Project-specific settings
+project:
+  name: isee-v2
+  description: "Idea Synthesis and Extraction Engine - Production Layer Implementation"
+  techStack:
+    - TypeScript
+    - Bun
+    - SQLite
+    - OpenTelemetry

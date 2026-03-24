@@ -1,0 +1,158 @@
+# ISEE Foundation Phase (DAG Workflow)
+# Usage: archon workflow run isee-foundation-dag --branch feat/foundation
+#
+# This workflow implements the Foundation phase using DAG for optimal parallelism.
+# Database must be done first, then other components can run in parallel.
+
+name: isee-foundation-dag
+description: Implement Foundation phase with parallel execution where possible
+
+nodes:
+  # First: Database setup (no dependencies)
+  - id: database
+    prompt: |
+      Implement database setup for ISEE v2 Production Layer.
+
+      ## Requirements (from IMPLEMENTATION-PLAN.md Section 1.1)
+      - Create src/production/storage/database.ts
+      - Create src/production/storage/migrations/001_initial.sql
+      - Create src/production/storage/migrations/index.ts
+      - Use bun:sqlite
+      - Implement connection pooling
+      - Auto-run migrations on startup
+
+      ## Reference
+      - PRODUCTION-LAYER-SPEC.md Section 4.1 for schema
+
+      Implement, validate with typecheck, and commit.
+
+    output_format:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["success", "failed"]
+        files_created:
+          type: array
+          items:
+            type: string
+
+  # Run persistence depends on database
+  - id: run-persistence
+    depends_on: [database]
+    when: "$database.output.status == 'success'"
+    context: fresh
+    prompt: |
+      Implement run persistence for ISEE v2.
+
+      ## Requirements (from IMPLEMENTATION-PLAN.md Section 1.2)
+      - Create src/production/storage/runs.ts
+      - Create src/production/storage/llm-calls.ts
+      - Modify src/pipeline.ts to add persistence hooks
+      - Add RunRecord, LlmCallRecord types to src/types.ts
+
+      Implement, validate, and commit.
+
+    output_format:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["success", "failed"]
+
+  # Auth can run in parallel with run-persistence (both depend on database)
+  - id: auth
+    depends_on: [database]
+    when: "$database.output.status == 'success'"
+    context: fresh
+    prompt: |
+      Implement API key authentication for ISEE v2.
+
+      ## Requirements (from IMPLEMENTATION-PLAN.md Section 1.3)
+      - Create src/production/auth/api-keys.ts
+      - Create src/production/auth/middleware.ts
+      - Modify src/server.ts to apply middleware
+      - SHA-256 hashing, ISEE_API_KEY_SALT env var
+
+      Implement, validate, and commit.
+
+    output_format:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["success", "failed"]
+
+  # Rate limiting depends on both database and auth
+  - id: rate-limiting
+    depends_on: [database, auth]
+    when: "$database.output.status == 'success' && $auth.output.status == 'success'"
+    context: fresh
+    prompt: |
+      Implement rate limiting for ISEE v2.
+
+      ## Requirements (from IMPLEMENTATION-PLAN.md Section 1.4)
+      - Create src/production/security/rate-limit.ts
+      - Token bucket algorithm
+      - Per-key and per-IP limits
+      - X-RateLimit-* headers
+
+      Implement, validate, and commit.
+
+    output_format:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["success", "failed"]
+
+  # Input validation can run in parallel with rate-limiting
+  - id: input-validation
+    depends_on: [database]
+    when: "$database.output.status == 'success'"
+    context: fresh
+    prompt: |
+      Implement input validation for ISEE v2.
+
+      ## Requirements (from IMPLEMENTATION-PLAN.md Section 1.5)
+      - Create src/production/security/validation.ts
+      - Create src/production/security/cors.ts
+      - Query length validation, sanitization
+      - CORS configuration
+
+      Implement, validate, and commit.
+
+    output_format:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["success", "failed"]
+
+  # Final integration test after all components
+  - id: integration
+    depends_on: [run-persistence, auth, rate-limiting, input-validation]
+    trigger_rule: all_success
+    context: fresh
+    prompt: |
+      All Foundation components have been implemented.
+
+      Run a full integration check:
+      1. `bun run typecheck` — Must pass
+      2. `bun run lint` — Must pass
+      3. `bun test` — Must pass
+      4. Start server and verify it boots: `timeout 10 bun run dev`
+
+      If all checks pass, update IMPLEMENTATION-PLAN.md to mark all
+      Foundation components as complete.
+
+      Report final status.
+
+    output_format:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["success", "failed"]
+        summary:
+          type: string

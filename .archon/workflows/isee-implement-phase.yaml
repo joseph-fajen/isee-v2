@@ -1,0 +1,64 @@
+# ISEE Phase Implementation Workflow (Ralph Pattern)
+# Usage: archon workflow run isee-implement-phase --branch <branch> "<phase description>"
+#
+# This workflow iteratively implements all components in a phase,
+# maintaining context across iterations.
+
+name: isee-implement-phase
+description: Implement an entire phase using Ralph pattern (iterative with memory)
+
+loop:
+  until: PHASE_COMPLETE
+  max_iterations: 15
+  fresh_context: false  # Keep memory across iterations
+
+prompt: |
+  You are implementing ISEE v2's Production Layer, one component at a time.
+
+  ## Phase to Implement
+  $ARGUMENTS
+
+  ## Reference Documents
+  - PRODUCTION-LAYER-SPEC.md — Full technical specification
+  - IMPLEMENTATION-PLAN.md — Task breakdown with requirements for each component
+
+  ## Your Process (Each Iteration)
+
+  1. **Check Progress**: Read IMPLEMENTATION-PLAN.md and identify which components
+     in this phase are already implemented (check for existence of files and
+     checkmarks in the Progress Tracking section).
+
+  2. **Pick Next Component**: Select the next unimplemented component in sequence.
+     Components have dependencies — implement them in order.
+
+  3. **Implement**:
+     - Read the component's requirements from IMPLEMENTATION-PLAN.md
+     - Read relevant sections of PRODUCTION-LAYER-SPEC.md
+     - Implement the component following existing code patterns
+     - Add tests if applicable
+
+  4. **Validate**:
+     - Run `bun run typecheck`
+     - Run `bun test` (if tests exist)
+     - Fix any errors
+
+  5. **Commit**:
+     - Create a commit for this component
+     - Use conventional commit format (feat:, fix:, etc.)
+
+  6. **Update Progress**:
+     - Mark the component as complete in IMPLEMENTATION-PLAN.md
+     - Add [x] to the checkbox
+
+  7. **Check Completion**:
+     - If ALL components in this phase are now complete, output:
+       <promise>PHASE_COMPLETE</promise>
+     - Otherwise, continue to the next iteration
+
+  ## Important
+  - Work on ONE component per iteration
+  - Always validate before committing
+  - Update the progress tracking after each component
+  - Only output PHASE_COMPLETE when the entire phase is done
+
+  Begin by checking progress and identifying the next component to implement.
