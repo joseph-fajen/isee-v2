@@ -427,6 +427,75 @@ export interface RateLimitStatus {
 }
 
 // ============================================================================
+// Dashboard API Types
+// ============================================================================
+
+/**
+ * Summary metrics for the dashboard overview card.
+ */
+export interface DashboardSummary {
+  totalRuns: number;
+  runsToday: number;
+  successRate: number;
+  successRateChange: number;
+  avgLatencyMs: number;
+  latencyChange: number;
+  totalCostUsd: number;
+  costToday: number;
+  lastUpdated: string;
+}
+
+/**
+ * A single data point in a latency time series.
+ */
+export interface LatencyPoint {
+  /** ISO-8601 bucket start time */
+  timestamp: string;
+  avgLatencyMs: number;
+  callCount: number;
+  successRate: number;
+}
+
+/**
+ * Per-model statistics for the models table.
+ */
+export interface ModelStats {
+  provider: string;
+  model: string;
+  totalCalls: number;
+  successRate: number;
+  avgLatencyMs: number;
+  p95LatencyMs: number;
+  totalCostUsd: number;
+}
+
+/**
+ * Cost breakdown by provider and model.
+ */
+export interface CostBreakdown {
+  /** '24h' | '7d' | '30d' */
+  period: string;
+  totalCostUsd: number;
+  openrouterCostUsd: number;
+  anthropicCostUsd: number;
+  byModel: Array<{ model: string; costUsd: number }>;
+}
+
+/**
+ * System health status.
+ */
+export interface HealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  checks: {
+    database: 'ok' | 'error';
+    openrouter: 'ok' | 'error' | 'circuit_open';
+    anthropic: 'ok' | 'error' | 'circuit_open';
+  };
+  activeRuns: number;
+  timestamp: string;
+}
+
+// ============================================================================
 // API Response Types
 // ============================================================================
 

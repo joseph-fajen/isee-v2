@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ISEE Operations Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon-convergence.svg">
+  <style>
+    :root {
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #1a1a1a;
+      --bg-tertiary: #252525;
+      --text-primary: #f5f5f5;
+      --text-secondary: #a0a0a0;
+      --accent: #f59e0b;
+      --border: #333;
+      --success: #22c55e;
+      --error: #ef4444;
+      --warning: #f59e0b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header h1 span { color: var(--accent); }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .health-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.875rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .health-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+    }
+
+    .health-dot.healthy { background: var(--success); }
+    .health-dot.degraded { background: var(--warning); }
+    .health-dot.unhealthy { background: var(--error); }
+
+    .last-updated { font-size: 0.75rem; color: var(--text-secondary); }
+
+    /* Auth form */
+    #auth-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      max-width: 400px;
+      margin: 4rem auto;
+      text-align: center;
+    }
+
+    #auth-section h2 { margin-bottom: 1rem; font-size: 1.25rem; }
+    #auth-section p { color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem; }
+
+    .input-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    input[type="password"], input[type="text"] {
+      flex: 1;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      padding: 0.6rem 1rem;
+      font-size: 0.9rem;
+    }
+
+    input[type="password"]:focus, input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    button {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      padding: 0.6rem 1.25rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    button.secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .error-msg {
+      color: var(--error);
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+    }
+
+    /* Summary cards */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .card-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .card-value {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 0.4rem;
+    }
+
+    .card-sub {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .card-sub.up { color: var(--success); }
+    .card-sub.down { color: var(--error); }
+
+    /* Two-column row */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* Recent runs */
+    .runs-list { list-style: none; }
+
+    .run-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+
+    .run-item:last-child { border-bottom: none; }
+
+    .run-status { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+
+    .run-body { flex: 1; overflow: hidden; }
+
+    .run-time { color: var(--text-secondary); font-size: 0.75rem; }
+
+    .run-query {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .run-error { color: var(--error); font-size: 0.75rem; }
+
+    /* Model bars */
+    .model-list { list-style: none; }
+
+    .model-item {
+      margin-bottom: 0.75rem;
+    }
+
+    .model-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .model-name { color: var(--text-primary); font-family: monospace; }
+    .model-rate { color: var(--text-secondary); }
+
+    .bar-track {
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    /* Cost breakdown */
+    .cost-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .cost-block { flex: 1; }
+
+    .cost-provider {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.25rem;
+    }
+
+    .cost-amount { font-size: 1.25rem; font-weight: 700; }
+
+    .cost-bar-track {
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      height: 10px;
+      overflow: hidden;
+      display: flex;
+      margin-bottom: 0.5rem;
+    }
+
+    .cost-bar-or { background: var(--accent); height: 100%; transition: width 0.3s; }
+    .cost-bar-an { background: #60a5fa; height: 100%; transition: width 0.3s; }
+
+    .cost-legend {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+
+    /* Period selector */
+    .period-selector {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .period-btn {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.25rem 0.6rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .period-btn.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+
+    /* Latency chart */
+    .latency-chart {
+      height: 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .latency-bars {
+      display: flex;
+      align-items: flex-end;
+      height: 100%;
+      gap: 2px;
+    }
+
+    .latency-bar {
+      flex: 1;
+      min-width: 4px;
+      border-radius: 2px 2px 0 0;
+      background: var(--accent);
+      opacity: 0.7;
+      transition: opacity 0.15s;
+    }
+
+    .latency-bar:hover { opacity: 1; }
+
+    .chart-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    /* Health checks */
+    .health-checks {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .check-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.875rem;
+    }
+
+    .check-name { color: var(--text-secondary); }
+
+    .check-status {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-weight: 500;
+    }
+
+    .check-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+    }
+
+    .check-dot.ok { background: var(--success); }
+    .check-dot.error { background: var(--error); }
+    .check-dot.circuit_open { background: var(--warning); }
+
+    .section-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.875rem;
+    }
+
+    /* Loading skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--border) 50%, var(--bg-tertiary) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+      height: 1em;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Auto-refresh toggle */
+    .refresh-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .auto-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle {
+      position: relative;
+      display: inline-block;
+      width: 32px;
+      height: 18px;
+    }
+
+    .toggle input { opacity: 0; width: 0; height: 0; }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle-slider:before {
+      content: '';
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .toggle input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+    .toggle input:checked + .toggle-slider:before { transform: translateX(14px); background: #000; }
+
+    #dashboard-section { display: none; }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      body { padding: 1rem; }
+      .card-value { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="auth-section">
+      <h2>Operations Dashboard</h2>
+      <p>Enter your API key to view metrics</p>
+      <div class="input-row">
+        <input type="password" id="api-key-input" placeholder="Bearer token or API key" autocomplete="current-password">
+        <button onclick="authenticate()">Unlock</button>
+      </div>
+      <div id="auth-error" class="error-msg" style="display:none"></div>
+    </div>
+
+    <div id="dashboard-section">
+      <header>
+        <h1>ISEE <span>Operations</span></h1>
+        <div class="header-right">
+          <div id="health-badge" class="health-badge">
+            <div id="health-dot" class="health-dot"></div>
+            <span id="health-text">—</span>
+          </div>
+          <div class="refresh-controls">
+            <label class="toggle" title="Auto-refresh every 30s">
+              <input type="checkbox" id="auto-refresh-toggle" checked onchange="toggleAutoRefresh()">
+              <span class="toggle-slider"></span>
+            </label>
+            <label class="auto-label" for="auto-refresh-toggle">Auto</label>
+            <button class="secondary" onclick="refreshAll()" id="refresh-btn">Refresh</button>
+          </div>
+          <span id="last-updated" class="last-updated"></span>
+        </div>
+      </header>
+
+      <!-- Summary cards -->
+      <div class="summary-grid" id="summary-grid">
+        <div class="card" id="card-runs">
+          <div class="card-label">Total Runs</div>
+          <div class="card-value skeleton" style="height:2rem;width:60%;margin-bottom:0.5rem"></div>
+          <div class="card-sub skeleton" style="height:0.8rem;width:40%"></div>
+        </div>
+        <div class="card" id="card-success">
+          <div class="card-label">Success Rate</div>
+          <div class="card-value skeleton" style="height:2rem;width:60%;margin-bottom:0.5rem"></div>
+          <div class="card-sub skeleton" style="height:0.8rem;width:40%"></div>
+        </div>
+        <div class="card" id="card-latency">
+          <div class="card-label">Avg Latency</div>
+          <div class="card-value skeleton" style="height:2rem;width:60%;margin-bottom:0.5rem"></div>
+          <div class="card-sub skeleton" style="height:0.8rem;width:40%"></div>
+        </div>
+        <div class="card" id="card-cost">
+          <div class="card-label">Total Cost</div>
+          <div class="card-value skeleton" style="height:2rem;width:60%;margin-bottom:0.5rem"></div>
+          <div class="card-sub skeleton" style="height:0.8rem;width:40%"></div>
+        </div>
+      </div>
+
+      <!-- Latency chart -->
+      <div class="card" style="margin-bottom:1.5rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
+          <div class="section-title" style="margin-bottom:0">Pipeline Latency</div>
+          <div class="period-selector">
+            <button class="period-btn active" onclick="setLatencyPeriod('24h', this)">24h</button>
+            <button class="period-btn" onclick="setLatencyPeriod('7d', this)">7d</button>
+          </div>
+        </div>
+        <div class="latency-chart" id="latency-chart">
+          <div class="chart-empty">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Runs + Models -->
+      <div class="two-col">
+        <div class="card">
+          <div class="section-title">Recent Runs</div>
+          <ul class="runs-list" id="runs-list">
+            <li class="run-item">
+              <div class="skeleton" style="height:0.875rem;width:100%"></div>
+            </li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="section-title">Model Performance</div>
+          <ul class="model-list" id="model-list">
+            <li class="model-item">
+              <div class="skeleton" style="height:0.8rem;margin-bottom:0.25rem"></div>
+              <div class="skeleton" style="height:6px"></div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Costs -->
+      <div class="card" style="margin-bottom:1.5rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
+          <div class="section-title" style="margin-bottom:0">Cost Breakdown</div>
+          <div class="period-selector">
+            <button class="period-btn" onclick="setCostPeriod('24h', this)">24h</button>
+            <button class="period-btn active" onclick="setCostPeriod('7d', this)">7d</button>
+            <button class="period-btn" onclick="setCostPeriod('30d', this)">30d</button>
+          </div>
+        </div>
+        <div id="cost-content">
+          <div class="skeleton" style="height:10px;margin-bottom:0.75rem"></div>
+          <div class="skeleton" style="height:1.25rem;width:40%"></div>
+        </div>
+      </div>
+
+      <!-- Health -->
+      <div class="card">
+        <div class="section-title">System Health</div>
+        <div class="health-checks" id="health-checks">
+          <div class="skeleton" style="height:0.875rem"></div>
+        </div>
+        <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-secondary)" id="active-runs-label"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------------------------------------------------------------------------
+    // State
+    // ---------------------------------------------------------------------------
+
+    let apiKey = '';
+    let autoRefreshTimer = null;
+    let latencyPeriod = '24h';
+    let costPeriod = '7d';
+
+    // ---------------------------------------------------------------------------
+    // Auth
+    // ---------------------------------------------------------------------------
+
+    function authenticate() {
+      const val = document.getElementById('api-key-input').value.trim();
+      if (!val) return;
+      apiKey = val;
+      // Quick auth check via health endpoint
+      apiFetch('/api/dashboard/health')
+        .then(() => {
+          document.getElementById('auth-section').style.display = 'none';
+          document.getElementById('dashboard-section').style.display = 'block';
+          // Persist key in sessionStorage so page refresh works
+          sessionStorage.setItem('isee_dashboard_key', apiKey);
+          refreshAll();
+          startAutoRefresh();
+        })
+        .catch(() => {
+          const err = document.getElementById('auth-error');
+          err.textContent = 'Authentication failed. Check your API key.';
+          err.style.display = 'block';
+        });
+    }
+
+    document.getElementById('api-key-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') authenticate();
+    });
+
+    // Restore session
+    (function() {
+      const stored = sessionStorage.getItem('isee_dashboard_key');
+      if (stored) {
+        apiKey = stored;
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('dashboard-section').style.display = 'block';
+        refreshAll();
+        startAutoRefresh();
+      }
+    })();
+
+    // ---------------------------------------------------------------------------
+    // API helpers
+    // ---------------------------------------------------------------------------
+
+    function apiFetch(path) {
+      const headers = { 'Authorization': `Bearer ${apiKey}` };
+      return fetch(path, { headers }).then(r => {
+        if (r.status === 401) {
+          // Key expired or revoked
+          sessionStorage.removeItem('isee_dashboard_key');
+          document.getElementById('auth-section').style.display = '';
+          document.getElementById('dashboard-section').style.display = 'none';
+          throw new Error('Unauthorized');
+        }
+        return r.json();
+      }).then(body => {
+        if (!body.success) throw new Error(body.error || 'API error');
+        return body.data;
+      });
+    }
+
+    // ---------------------------------------------------------------------------
+    // Refresh
+    // ---------------------------------------------------------------------------
+
+    function refreshAll() {
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true;
+      btn.textContent = '…';
+
+      Promise.allSettled([
+        loadSummary(),
+        loadRuns(),
+        loadLatency(),
+        loadModels(),
+        loadCosts(),
+        loadHealth(),
+      ]).then(() => {
+        btn.disabled = false;
+        btn.textContent = 'Refresh';
+        document.getElementById('last-updated').textContent =
+          'Updated ' + new Date().toLocaleTimeString();
+      });
+    }
+
+    function startAutoRefresh() {
+      stopAutoRefresh();
+      if (document.getElementById('auto-refresh-toggle').checked) {
+        autoRefreshTimer = setInterval(refreshAll, 30000);
+      }
+    }
+
+    function stopAutoRefresh() {
+      if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+    }
+
+    function toggleAutoRefresh() {
+      if (document.getElementById('auto-refresh-toggle').checked) {
+        startAutoRefresh();
+      } else {
+        stopAutoRefresh();
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Summary
+    // ---------------------------------------------------------------------------
+
+    function loadSummary() {
+      return apiFetch('/api/dashboard/summary').then(data => {
+        renderCard('card-runs',
+          fmt(data.totalRuns),
+          `+${data.runsToday} today`
+        );
+        const srChange = data.successRateChange;
+        renderCard('card-success',
+          data.successRate.toFixed(1) + '%',
+          (srChange >= 0 ? '▲' : '▼') + ' ' + Math.abs(srChange).toFixed(1) + '%',
+          srChange >= 0 ? 'up' : 'down'
+        );
+        const latChange = data.latencyChange;
+        renderCard('card-latency',
+          fmtMs(data.avgLatencyMs),
+          (latChange <= 0 ? '▼' : '▲') + ' ' + fmtMs(Math.abs(latChange)),
+          latChange <= 0 ? 'up' : 'down'
+        );
+        renderCard('card-cost',
+          '$' + data.totalCostUsd.toFixed(2),
+          '+$' + data.costToday.toFixed(2) + ' today'
+        );
+      }).catch(() => {});
+    }
+
+    function renderCard(id, value, sub, subClass) {
+      const card = document.getElementById(id);
+      if (!card) return;
+      const labels = { 'card-runs': 'Total Runs', 'card-success': 'Success Rate', 'card-latency': 'Avg Latency', 'card-cost': 'Total Cost' };
+      card.innerHTML =
+        `<div class="card-label">${labels[id] || ''}</div>` +
+        `<div class="card-value">${value}</div>` +
+        `<div class="card-sub${subClass ? ' ' + subClass : ''}">${sub}</div>`;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Recent Runs
+    // ---------------------------------------------------------------------------
+
+    function loadRuns() {
+      return apiFetch('/api/dashboard/runs?limit=10').then(runs => {
+        const ul = document.getElementById('runs-list');
+        if (!runs.length) {
+          ul.innerHTML = '<li style="color:var(--text-secondary);font-size:0.875rem;padding:0.5rem 0">No runs yet</li>';
+          return;
+        }
+        ul.innerHTML = runs.map(run => {
+          const icon = run.status === 'completed' ? '✓' : run.status === 'failed' ? '✗' : '◌';
+          const color = run.status === 'completed' ? 'var(--success)' : run.status === 'failed' ? 'var(--error)' : 'var(--text-secondary)';
+          const time = run.startedAt ? new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+          const query = (run.refinedQuery || run.query).substring(0, 50) + (run.query.length > 50 ? '…' : '');
+          const err = run.errorMessage ? `<div class="run-error">${escHtml(run.errorMessage.substring(0, 60))}</div>` : '';
+          return `<li class="run-item">
+            <span class="run-status" style="color:${color}">${icon}</span>
+            <div class="run-body">
+              <div class="run-query">${escHtml(query)}</div>
+              <div class="run-time">${time}${run.durationMs ? ' · ' + fmtMs(run.durationMs) : ''}${run.totalCostUsd ? ' · $' + run.totalCostUsd.toFixed(3) : ''}</div>
+              ${err}
+            </div>
+          </li>`;
+        }).join('');
+      }).catch(() => {});
+    }
+
+    // ---------------------------------------------------------------------------
+    // Latency chart
+    // ---------------------------------------------------------------------------
+
+    function setLatencyPeriod(period, btn) {
+      latencyPeriod = period;
+      document.querySelectorAll('.period-btn').forEach(b => {
+        if (b.parentElement.id !== 'cost-period-sel') b.classList.remove('active');
+      });
+      btn.classList.add('active');
+      loadLatency();
+    }
+
+    function loadLatency() {
+      return apiFetch(`/api/dashboard/latency?period=${latencyPeriod}`).then(points => {
+        const chart = document.getElementById('latency-chart');
+        if (!points.length) {
+          chart.innerHTML = '<div class="chart-empty">No data for this period</div>';
+          return;
+        }
+        const maxMs = Math.max(...points.map(p => p.avgLatencyMs)) || 1;
+        chart.innerHTML = '<div class="latency-bars">' +
+          points.map(p => {
+            const h = Math.max(4, Math.round((p.avgLatencyMs / maxMs) * 100));
+            const tip = `${new Date(p.timestamp).toLocaleString()} · avg ${fmtMs(p.avgLatencyMs)} · ${p.callCount} run${p.callCount !== 1 ? 's' : ''}`;
+            return `<div class="latency-bar" style="height:${h}%" title="${escHtml(tip)}"></div>`;
+          }).join('') +
+          '</div>';
+      }).catch(() => {
+        document.getElementById('latency-chart').innerHTML =
+          '<div class="chart-empty">Failed to load</div>';
+      });
+    }
+
+    // ---------------------------------------------------------------------------
+    // Model performance
+    // ---------------------------------------------------------------------------
+
+    function loadModels() {
+      return apiFetch('/api/dashboard/models').then(models => {
+        const ul = document.getElementById('model-list');
+        if (!models.length) {
+          ul.innerHTML = '<li style="color:var(--text-secondary);font-size:0.875rem">No data yet</li>';
+          return;
+        }
+        // Sort by success rate desc
+        models.sort((a, b) => b.successRate - a.successRate);
+        ul.innerHTML = models.slice(0, 8).map(m => {
+          const name = m.model.split('/').pop() || m.model;
+          const rate = m.successRate.toFixed(0);
+          return `<li class="model-item">
+            <div class="model-header">
+              <span class="model-name">${escHtml(name)}</span>
+              <span class="model-rate">${rate}% · ${fmtMs(m.avgLatencyMs)}</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" style="width:${Math.min(100, m.successRate)}%"></div>
+            </div>
+          </li>`;
+        }).join('');
+      }).catch(() => {});
+    }
+
+    // ---------------------------------------------------------------------------
+    // Cost breakdown
+    // ---------------------------------------------------------------------------
+
+    function setCostPeriod(period, btn) {
+      costPeriod = period;
+      document.querySelectorAll('#cost-period-sel .period-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadCosts();
+    }
+
+    function loadCosts() {
+      return apiFetch(`/api/dashboard/costs?period=${costPeriod}`).then(data => {
+        const el = document.getElementById('cost-content');
+        const total = data.totalCostUsd;
+        const orPct = total > 0 ? (data.openrouterCostUsd / total) * 100 : 50;
+        const anPct = total > 0 ? (data.anthropicCostUsd / total) * 100 : 50;
+
+        let byModelHtml = '';
+        if (data.byModel && data.byModel.length) {
+          const maxCost = Math.max(...data.byModel.map(m => m.costUsd)) || 1;
+          byModelHtml = '<div style="margin-top:0.75rem">' +
+            data.byModel.slice(0, 6).map(m => {
+              const name = m.model.split('/').pop() || m.model;
+              const pct = (m.costUsd / maxCost) * 100;
+              return `<div style="margin-bottom:0.4rem;font-size:0.8rem">
+                <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+                  <span style="color:var(--text-secondary);font-family:monospace">${escHtml(name)}</span>
+                  <span>$${m.costUsd.toFixed(4)}</span>
+                </div>
+                <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+              </div>`;
+            }).join('') + '</div>';
+        }
+
+        el.innerHTML = `
+          <div class="cost-bar-track">
+            <div class="cost-bar-or" style="width:${orPct}%"></div>
+            <div class="cost-bar-an" style="width:${anPct}%"></div>
+          </div>
+          <div class="cost-row">
+            <div class="cost-block">
+              <div class="cost-provider">OpenRouter</div>
+              <div class="cost-amount">$${data.openrouterCostUsd.toFixed(2)}</div>
+            </div>
+            <div class="cost-block">
+              <div class="cost-provider">Anthropic</div>
+              <div class="cost-amount">$${data.anthropicCostUsd.toFixed(2)}</div>
+            </div>
+            <div class="cost-block" style="text-align:right">
+              <div class="cost-provider">Total</div>
+              <div class="cost-amount">$${total.toFixed(2)}</div>
+            </div>
+          </div>
+          <div class="cost-legend">
+            <span><span class="legend-dot" style="background:var(--accent)"></span>OpenRouter ${orPct.toFixed(0)}%</span>
+            <span><span class="legend-dot" style="background:#60a5fa"></span>Anthropic ${anPct.toFixed(0)}%</span>
+          </div>
+          ${byModelHtml}
+        `;
+      }).catch(() => {});
+    }
+
+    // ---------------------------------------------------------------------------
+    // Health
+    // ---------------------------------------------------------------------------
+
+    function loadHealth() {
+      return apiFetch('/api/dashboard/health').then(data => {
+        // Update header badge
+        const dot = document.getElementById('health-dot');
+        const text = document.getElementById('health-text');
+        dot.className = 'health-dot ' + data.status;
+        text.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+
+        // Health checks
+        const checks = document.getElementById('health-checks');
+        const rows = [
+          { name: 'Database', key: 'database', val: data.checks.database },
+          { name: 'OpenRouter', key: 'openrouter', val: data.checks.openrouter },
+          { name: 'Anthropic', key: 'anthropic', val: data.checks.anthropic },
+        ];
+        checks.innerHTML = rows.map(r => {
+          const label = r.val === 'ok' ? 'OK' : r.val === 'circuit_open' ? 'Circuit Open' : 'Error';
+          return `<div class="check-row">
+            <span class="check-name">${r.name}</span>
+            <span class="check-status">
+              <span class="check-dot ${r.val}"></span>
+              ${label}
+            </span>
+          </div>`;
+        }).join('');
+
+        // Active runs
+        document.getElementById('active-runs-label').textContent =
+          data.activeRuns > 0 ? `${data.activeRuns} active run${data.activeRuns !== 1 ? 's' : ''}` : 'No active runs';
+      }).catch(() => {});
+    }
+
+    // ---------------------------------------------------------------------------
+    // Formatting helpers
+    // ---------------------------------------------------------------------------
+
+    function fmt(n) {
+      return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+    }
+
+    function fmtMs(ms) {
+      if (!ms) return '0s';
+      if (ms < 1000) return ms.toFixed(0) + 'ms';
+      if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+      return (ms / 60000).toFixed(1) + 'm';
+    }
+
+    function escHtml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
