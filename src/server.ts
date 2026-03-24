@@ -13,6 +13,8 @@ import { assessQuery, getFollowUpQuestions, rewriteUserQuery } from './pipeline/
 import { checkAuth, requireAdmin } from './auth/middleware';
 import { createApiKey } from './db/api-keys';
 import { applyRateLimit, withRateLimitHeaders } from './security/rate-limit-middleware';
+import { validateQuery } from './security/validation';
+import { handleCORS, handlePreflight } from './security/cors';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || 'localhost';
@@ -52,6 +54,19 @@ async function handleRequest(req: Request): Promise<Response> {
   const path = url.pathname;
   const method = req.method;
 
+  // Handle CORS preflight for all routes
+  if (method === 'OPTIONS') {
+    return handlePreflight(req);
+  }
+
+  const response = await routeRequest(req, url, path, method);
+  return handleCORS(req, response);
+}
+
+/**
+ * Core request router — dispatches to the appropriate handler.
+ */
+async function routeRequest(req: Request, url: URL, path: string, method: string): Promise<Response> {
   // Serve static files from public/
   if (method === 'GET' && (path === '/' || path === '/index.html')) {
     const html = await Bun.file('public/index.html').text();
@@ -96,11 +111,26 @@ async function handleRequest(req: Request): Promise<Response> {
     const rateLimitResult = applyRateLimit(req, authResult);
     if (rateLimitResult.limited) return rateLimitResult.response;
 
-    const query = url.searchParams.get('query');
+    const rawQuery = url.searchParams.get('query');
 
-    if (!query) {
+    if (!rawQuery) {
       return new Response('Missing query parameter', { status: 400 });
     }
+
+    const queryValidation = validateQuery(rawQuery);
+    if (!queryValidation.valid) {
+      return Response.json(
+        {
+          error: 'validation_error',
+          field: 'query',
+          message: queryValidation.error,
+          code: queryValidation.code,
+        },
+        { status: 400 }
+      );
+    }
+
+    const query = queryValidation.sanitized!;
 
     const refinementParam = url.searchParams.get('refinement');
     let refinementMeta: RefinementMetadata | undefined;
@@ -200,10 +230,24 @@ async function handleRequest(req: Request): Promise<Response> {
         );
       }
 
-      console.log(`[server] Starting analysis for query: ${body.query.substring(0, 50)}...`);
+      const queryValidation = validateQuery(body.query);
+      if (!queryValidation.valid) {
+        return Response.json(
+          {
+            error: 'validation_error',
+            field: 'query',
+            message: queryValidation.error,
+            code: queryValidation.code,
+          },
+          { status: 400 }
+        );
+      }
+
+      const validatedQuery = queryValidation.sanitized!;
+      console.log(`[server] Starting analysis for query: ${validatedQuery.substring(0, 50)}...`);
 
       // Run the full pipeline
-      const result = await runPipeline({ query: body.query, verbose: true });
+      const result = await runPipeline({ query: validatedQuery, verbose: true });
 
       // Save to file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
