@@ -693,7 +693,7 @@ Update this section as work progresses:
 - [x] 3.4 Graceful degradation
 
 ### Dashboard (Week 6)
-- [ ] 4.1 Dashboard API
+- [x] 4.1 Dashboard API
 - [ ] 4.2 Dashboard UI
 
 ### CI/CD & Deployment (Week 7)

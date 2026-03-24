@@ -20,6 +20,14 @@ import { applyRateLimit, withRateLimitHeaders } from './security/rate-limit-midd
 import { validateQuery } from './security/validation';
 import { handleCORS, handlePreflight } from './security/cors';
 import { generatePrometheusMetrics } from './observability/metrics';
+import {
+  getSummary,
+  getRecentRuns,
+  getLatencyTimeSeriesHandler,
+  getModelStats,
+  getCostBreakdown,
+  getHealthStatus,
+} from './dashboard';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || 'localhost';
@@ -398,6 +406,90 @@ async function routeRequest(req: Request, url: URL, path: string, method: string
     } catch (error) {
       console.error('[server] Metrics error:', error);
       return new Response('Error generating metrics', { status: 500 });
+    }
+  }
+
+  // Dashboard: Summary metrics
+  if (method === 'GET' && path === '/api/dashboard/summary') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
+
+    try {
+      const data = await getSummary();
+      return Response.json({ success: true, data });
+    } catch (error) {
+      return Response.json({ success: false, error: error instanceof Error ? error.message : 'Failed' }, { status: 500 });
+    }
+  }
+
+  // Dashboard: Recent runs
+  if (method === 'GET' && path === '/api/dashboard/runs') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
+
+    try {
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 100);
+      const offset = Math.max(parseInt(url.searchParams.get('offset') || '0', 10), 0);
+      const data = await getRecentRuns(limit, offset);
+      return Response.json({ success: true, data });
+    } catch (error) {
+      return Response.json({ success: false, error: error instanceof Error ? error.message : 'Failed' }, { status: 500 });
+    }
+  }
+
+  // Dashboard: Latency time series
+  if (method === 'GET' && path === '/api/dashboard/latency') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
+
+    try {
+      const raw = url.searchParams.get('period') || '24h';
+      const period = (raw === '7d' ? '7d' : '24h') as '24h' | '7d';
+      const data = await getLatencyTimeSeriesHandler(period);
+      return Response.json({ success: true, data });
+    } catch (error) {
+      return Response.json({ success: false, error: error instanceof Error ? error.message : 'Failed' }, { status: 500 });
+    }
+  }
+
+  // Dashboard: Model statistics
+  if (method === 'GET' && path === '/api/dashboard/models') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
+
+    try {
+      const data = await getModelStats();
+      return Response.json({ success: true, data });
+    } catch (error) {
+      return Response.json({ success: false, error: error instanceof Error ? error.message : 'Failed' }, { status: 500 });
+    }
+  }
+
+  // Dashboard: Cost breakdown
+  if (method === 'GET' && path === '/api/dashboard/costs') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
+
+    try {
+      const raw = url.searchParams.get('period') || '7d';
+      const period = (['24h', '7d', '30d'].includes(raw) ? raw : '7d') as '24h' | '7d' | '30d';
+      const data = await getCostBreakdown(period);
+      return Response.json({ success: true, data });
+    } catch (error) {
+      return Response.json({ success: false, error: error instanceof Error ? error.message : 'Failed' }, { status: 500 });
+    }
+  }
+
+  // Dashboard: Health status
+  if (method === 'GET' && path === '/api/dashboard/health') {
+    const authResult = checkAuth(req);
+    if (!authResult.ok) return authResult.response;
+
+    try {
+      const data = await getHealthStatus();
+      return Response.json({ success: true, data });
+    } catch (error) {
+      return Response.json({ success: false, error: error instanceof Error ? error.message : 'Failed' }, { status: 500 });
     }
   }
 
