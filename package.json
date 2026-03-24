@@ -11,7 +11,8 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "test:golden": "bun test test/golden.test.ts --timeout 360000"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
