@@ -9,6 +9,7 @@
  *   v2 — extend_runs: add cost/stats/auth columns and started_at to runs
  *   v3 — add_llm_calls: per-call telemetry table
  *   v4 — add_api_keys: API key management table
+ *   v5 — add_rate_limit_buckets: token bucket state for rate limiting
  */
 
 import type { Migration } from './migrations';
@@ -115,6 +116,19 @@ export const migrations: Migration[] = [
 
       CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys (key_hash);
       CREATE INDEX IF NOT EXISTS idx_api_keys_is_active ON api_keys (is_active);
+    `,
+  },
+  {
+    version: 5,
+    name: 'add_rate_limit_buckets',
+    sql: `
+      -- Token bucket state for rate limiting.
+      -- key is 'apikey:<id>', 'ip:<addr>', or 'global'.
+      CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+        key         TEXT PRIMARY KEY,
+        tokens      REAL NOT NULL,
+        last_update TEXT NOT NULL
+      );
     `,
   },
 ];
