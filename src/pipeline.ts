@@ -21,7 +21,7 @@ import { createRunLogger } from './utils/logger';
 import { withSpan } from './observability/spans';
 import { getTracer } from './observability/tracing';
 import { withTimeout, TIMEOUTS } from './resilience/timeout';
-import { createRun, updateRun, initDatabase } from './db';
+import { createRun, updateRun, initDatabase, getCostsByProvider } from './db';
 
 export interface PipelineResult {
   briefing: Briefing;
@@ -320,7 +320,8 @@ export async function runPipeline(
       // Render markdown
       const markdown = renderBriefingMarkdown(translatedBriefing);
 
-      // Update run record with final stats
+      // Aggregate costs from llm_calls and update run record with final stats
+      const costs = getCostsByProvider(runId);
       updateRun(runId, {
         status: 'completed',
         completedAt: new Date().toISOString(),
@@ -328,6 +329,9 @@ export async function runPipeline(
         synthesisCallCount: briefing.stats.synthesisCallCount,
         successfulCalls: briefing.stats.successfulCalls,
         clusterCount: briefing.stats.clusterCount,
+        totalCostUsd: costs.totalCostUsd,
+        openrouterCostUsd: costs.openrouterCostUsd,
+        anthropicCostUsd: costs.anthropicCostUsd,
       });
 
       return { briefing, translatedBriefing, markdown };
