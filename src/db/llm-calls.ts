@@ -140,3 +140,39 @@ export function getCallStats(runId: string): {
     totalCost: row?.total_cost ?? 0,
   };
 }
+
+/**
+ * Aggregates costs for a run broken down by provider.
+ *
+ * @returns Total cost and per-provider costs for openrouter and anthropic.
+ */
+export function getCostsByProvider(runId: string): {
+  totalCostUsd: number;
+  openrouterCostUsd: number;
+  anthropicCostUsd: number;
+} {
+  const db = getDatabase();
+
+  const rows = db.query<
+    { provider: string; provider_cost: number | null },
+    [string]
+  >(
+    `SELECT provider, SUM(cost_usd) AS provider_cost
+     FROM llm_calls
+     WHERE run_id = ?
+     GROUP BY provider`
+  ).all(runId);
+
+  let totalCostUsd = 0;
+  let openrouterCostUsd = 0;
+  let anthropicCostUsd = 0;
+
+  for (const row of rows) {
+    const cost = row.provider_cost ?? 0;
+    totalCostUsd += cost;
+    if (row.provider === 'openrouter') openrouterCostUsd = cost;
+    else if (row.provider === 'anthropic') anthropicCostUsd = cost;
+  }
+
+  return { totalCostUsd, openrouterCostUsd, anthropicCostUsd };
+}

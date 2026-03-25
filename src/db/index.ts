@@ -10,7 +10,7 @@ export { runMigrations } from './migrations';
 export type { Migration } from './migrations';
 export { migrations } from './schema';
 export { createRun, getRunById, updateRun, getRuns } from './runs';
-export { logLlmCall, getLlmCallsByRunId, getCallStats } from './llm-calls';
+export { logLlmCall, getLlmCallsByRunId, getCallStats, getCostsByProvider } from './llm-calls';
 export { createApiKey, validateApiKey, getApiKeyById, revokeApiKey, listApiKeys, seedAdminKeyIfNeeded } from './api-keys';
 
 import { getDatabase } from './connection';
