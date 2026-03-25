@@ -35,3 +35,6 @@ data/
 
 # Archon tooling
 .archon/
+
+# Personal analysis outputs
+fabric-outputs/
