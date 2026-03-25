@@ -1,6 +1,6 @@
 # ISEE v2 — Architecture Plan
 
-**Status**: Draft  
+**Status**: Production
 **Depends on**: PRD.md  
 
 ---
@@ -20,6 +20,59 @@ v1's `domain_manager.py` defined static domains (Urban Planning, Healthcare, etc
 
 ### The cognitive frameworks are solid
 `instruction_templates.py` contains 11 well-crafted framework prompts (Analytical, Creative, Critical, Integrative, Pragmatic, First Principles, Systems, Contrarian, Historical, Futurist, Disruption). These are directly reusable in v2 with minor adaptation to TypeScript.
+
+---
+
+## Agentic Design Patterns
+
+ISEE v2 implements several established agentic design patterns. Understanding these patterns helps explain the architectural choices and validates the design against industry best practices.
+
+### Multi-Agent System
+ISEE uses specialized agents, each with a distinct role — similar to a hospital where specialists coordinate rather than one generalist doing everything:
+
+| Agent | Role | Analogy |
+|-------|------|---------|
+| Prep Agent | Generates knowledge domains | Intake coordinator |
+| Clustering Agent | Groups responses by intellectual angle | Diagnostician |
+| Advocate Agents | Argue for their cluster's value | Specialists presenting cases |
+| Skeptic Agent | Challenges all advocates | Quality reviewer |
+| Synthesis Agent | Selects final ideas, writes briefing | Chief summarizing recommendations |
+| Translation Agent | Converts to plain language | Patient liaison |
+
+### Plan-and-Execute Pattern
+Rather than dynamically deciding next steps (ReAct pattern), ISEE uses a fixed 6-stage pipeline. This is appropriate because:
+- The problem is well-structured with clear stages
+- Each stage has defined inputs and outputs
+- Predictability and debuggability are priorities
+- No conditional branching or loops are needed
+
+### Hybrid Execution Model
+ISEE combines sequential and parallel execution strategically:
+
+| Execution Type | Where Used | Why |
+|----------------|------------|-----|
+| **Sequential** | Between stages | Each stage depends on previous output |
+| **Parallel** | Synthesis (~66 calls) | Independent LLM calls, 15-way concurrency |
+| **Parallel** | Advocates (5-7 calls) | Independent per-cluster arguments |
+| **Sequential** | Skeptic (1 call) | Must see all advocate outputs |
+| **Parallel** | Rebuttals (5-7 calls) | Independent responses to challenges |
+
+### Bounded Autonomy
+Each agent operates within strict contracts:
+- **Defined inputs**: TypeScript interfaces specify exactly what each agent receives
+- **Defined outputs**: Agents must return data matching their output interface
+- **No side effects**: Agents don't modify state outside their scope
+- **Orchestrator control**: The pipeline orchestrator (`pipeline.ts`) manages all flow
+
+This bounded autonomy provides capability while limiting risk — agents can't take unexpected actions or compound errors across the system.
+
+### Patterns Intentionally Not Used
+
+| Pattern | Why Not Used |
+|---------|--------------|
+| **ReAct** | Stages are single-turn tasks; thought-action-observation loops add latency without benefit |
+| **Reflection** | Tournament layer provides external critique via Skeptic; self-reflection would be redundant |
+| **Swarm** | Problem is well-structured; self-organizing agents suit dynamic/open-ended problems |
 
 ---
 
@@ -64,6 +117,12 @@ v1's `domain_manager.py` defined static domains (Urban Planning, Healthcare, etc
 │  │ Synthesis Agent │  Selects 3 ideas,              │
 │  │                 │  writes confidence narrative   │
 │  └─────────────────┘                                │
+│       │                                             │
+│       ▼                                             │
+│  ┌───────────────────┐                              │
+│  │ Translation Agent │  Converts to plain language  │
+│  │                   │  with concrete action items  │
+│  └───────────────────┘                              │
 │       │                                             │
 │       ▼                                             │
 │  [Briefing Output]                                  │
@@ -199,6 +258,28 @@ This is the key confidence mechanism. An idea that cannot survive the skeptic's 
 
 ---
 
+### Stage 5: Translation Agent
+
+**Purpose**: Convert the technical briefing into plain language with concrete action items.
+**Input**: Briefing (3 ideas) + refined query
+**Output**: TranslatedBriefing with simplified ideas
+
+**Why this stage exists**: The Synthesis Agent's output is technically precise but may use jargon or abstract framing. The Translation Agent makes ideas accessible to any reader while preserving the original briefing for those who want the full analysis.
+
+**Output structure per idea**:
+```typescript
+interface SimplifiedIdea {
+  title: string;           // Plain-language title
+  explanation: string;     // 2-3 sentence accessible explanation
+  whyForYou: string;       // Personal connection to user's context
+  actionItems: string[];   // 2-3 concrete next steps
+}
+```
+
+**Implementation**: Single LLM call. Receives ideas and query only — the debate transcript is preserved in output but not re-translated.
+
+---
+
 ## Model Selection for Synthesis Layer
 
 **Target**: 6 models chosen for genuine cognitive heterogeneity, not just brand diversity.
@@ -240,33 +321,84 @@ The Synthesis Layer's ~60 calls use the OpenRouter client directly (not the Clau
 Rationale: The UI has two states — input form and briefing output. This does not justify a React app. A single HTML file is faster to build, easier to maintain, and consistent with the simplicity principle.
 
 ### Storage
-**JSON files only**. Each run produces one output file: `isee-briefing-[timestamp].md`. No SQLite, no performance tracking database, no annotation storage.
+**SQLite database** (`data/isee.db`) for production observability:
+
+| Table | Purpose |
+|-------|---------|
+| `runs` | Run metadata, status, timing, total costs by provider |
+| `llm_calls` | Every LLM call with model, tokens, cost, duration |
+| `api_keys` | API key management for multi-tenant access |
+
+**Observability layer** (`src/observability/`):
+- Cost tracking per run and per provider
+- Metrics endpoint for Prometheus
+- Distributed tracing with OpenTelemetry
 
 ---
 
-## Repository Structure (New Repo)
+## Repository Structure
 
 ```
 isee-v2/
 ├── src/
 │   ├── pipeline/
 │   │   ├── prep.ts           # Stage 0: Domain generation
-│   │   ├── synthesis.ts      # Stage 1: Matrix generation
+│   │   ├── synthesis.ts      # Stage 1: Matrix generation (~66 parallel calls)
 │   │   ├── clustering.ts     # Stage 2: Emergent clustering
 │   │   ├── tournament.ts     # Stage 3: Advocate/Skeptic/Rebuttal
-│   │   └── synthesizer.ts    # Stage 4: Briefing generation
+│   │   ├── synthesizer.ts    # Stage 4: Briefing generation
+│   │   ├── refinement.ts     # Query refinement (pre-pipeline)
+│   │   └── translation.ts    # Stage 5: Plain-language translation
 │   ├── config/
-│   │   ├── frameworks.ts     # 11 cognitive framework prompts (from v1)
-│   │   └── models.ts         # 6 synthesis model definitions
+│   │   ├── frameworks.ts     # 11 cognitive framework prompts
+│   │   ├── models.ts         # 6 synthesis model definitions
+│   │   └── prompts/          # All agent prompts with design rationale
+│   ├── clients/
+│   │   ├── anthropic.ts      # Claude SDK for pipeline agents
+│   │   └── openrouter.ts     # OpenRouter for synthesis layer
+│   ├── db/
+│   │   ├── connection.ts     # SQLite connection management
+│   │   ├── schema.ts         # Table definitions
+│   │   ├── migrations.ts     # Schema migrations
+│   │   ├── runs.ts           # Run persistence
+│   │   ├── llm-calls.ts      # LLM call logging
+│   │   ├── api-keys.ts       # API key management
+│   │   └── metrics.ts        # Aggregated metrics queries
+│   ├── security/
+│   │   ├── rate-limit.ts     # Token bucket rate limiter
+│   │   ├── cors.ts           # CORS configuration
+│   │   └── validation.ts     # Input sanitization
+│   ├── auth/
+│   │   └── middleware.ts     # API key authentication
+│   ├── observability/
+│   │   ├── cost.ts           # Cost tracking per provider
+│   │   ├── metrics.ts        # Prometheus metrics
+│   │   ├── spans.ts          # Trace span helpers
+│   │   └── tracing.ts        # OpenTelemetry setup
+│   ├── resilience/
+│   │   ├── circuit-breaker.ts
+│   │   ├── retry.ts
+│   │   └── timeout.ts
+│   ├── dashboard/
+│   │   ├── handlers.ts       # Dashboard API endpoints
+│   │   └── cache.ts          # Dashboard data caching
+│   ├── utils/
+│   │   └── logger.ts         # Pino structured logging
 │   ├── types.ts              # Shared TypeScript interfaces
-│   ├── pipeline.ts           # Orchestrator: runs all stages in sequence
-│   └── server.ts             # Bun HTTP server
+│   ├── pipeline.ts           # Orchestrator: runs all stages
+│   └── server.ts             # Bun HTTP server + SSE streaming
 ├── public/
-│   └── index.html            # Single-page UI
-├── output/                   # Generated briefing files
+│   ├── index.html            # Main UI
+│   └── dashboard.html        # Operations dashboard
+├── data/                     # SQLite database (gitignored)
+├── test/
+│   ├── golden.test.ts        # Full pipeline integration tests
+│   └── golden-queries.json   # Test query fixtures
 ├── .env.template
 ├── CLAUDE.md
 ├── PRD.md
+├── ARCHITECTURE.md
+├── PROMPTS.md
 └── package.json
 ```
 
@@ -322,56 +454,50 @@ interface ExtractedIdea {
   whyEmerged: string;
   whyItMatters: string;
 }
+
+// Stage 5 output
+interface TranslatedBriefing {
+  queryPlainLanguage: string;
+  ideas: SimplifiedIdea[];
+  originalBriefing: Briefing;  // preserved for full-detail view
+}
+
+interface SimplifiedIdea {
+  title: string;           // Plain-language title
+  explanation: string;     // 2-3 sentence accessible explanation
+  whyForYou: string;       // Personal connection to user's context
+  actionItems: string[];   // 2-3 concrete next steps
+}
 ```
 
 ---
 
-## Open Questions for Implementation Phase
+## Implementation Decisions (Resolved)
 
-1. **Clustering prompt engineering**: What level of instruction produces consistently useful cluster names? Needs experimentation — test with 3–4 different prompt versions before committing.
+These questions were open during the design phase and have since been resolved:
 
-2. **Concurrency limiter**: OpenRouter rate limits vary by model. What's the right concurrent request ceiling for the Synthesis Layer? Start conservative (10 concurrent) and tune.
-
-3. **Advocate count**: If emergent clustering produces 7 clusters, 7 parallel advocate calls is fine. But the skeptic prompt grows with cluster count. Is there a ceiling above which the skeptic's quality degrades? May need to cap at 6 clusters.
-
-4. **Briefing rendering**: Markdown output is simple but requires the user to have a Markdown renderer. HTML output works everywhere but adds complexity. Recommendation: render Markdown to HTML in `index.html` using a lightweight library (marked.js, ~50kb).
-
----
-
-## Build Phases
-
-### Phase 1: Pipeline skeleton
-- Scaffold repo structure
-- Implement types.ts
-- Implement stub versions of all 5 pipeline stages
-- Wire orchestrator
-- Verify data flows end-to-end with mock responses
-
-### Phase 2: Synthesis Layer
-- Implement OpenRouter multi-model client
-- Port cognitive framework prompts from v1
-- Implement dynamic domain generation (Prep Agent)
-- Implement parallel execution with concurrency limiter
-- Test with 3 models × 3 frameworks × 2 domains = 18 calls
-
-### Phase 3: Clustering + Tournament
-- Implement Emergent Clustering Agent with prompt experimentation
-- Implement Advocate Agents (parallel)
-- Implement Skeptic Agent
-- Implement Rebuttal round
-- Test full Tournament layer with real Synthesis output
-
-### Phase 4: Synthesis Agent + Briefing
-- Implement Synthesis Agent with selection criteria
-- Implement Briefing formatter (Markdown + HTML)
-- Implement Bun HTTP server
-- Build index.html UI
-
-### Phase 5: Integration + tuning
-- End-to-end run with full ~60 call matrix
-- Tune cluster count, advocate prompts, synthesis criteria
-- Verify briefing quality against north star
+| Question | Resolution |
+|----------|------------|
+| **Clustering prompt engineering** | Implemented with argument-style naming constraint. Prompts in `src/config/prompts/clustering.ts` produce consistent, useful cluster names. |
+| **Concurrency limiter** | Set to 15 concurrent requests. Balances throughput against OpenRouter rate limits. Configurable via `concurrencyLimit` parameter. |
+| **Advocate count** | No hard cap. Clustering targets 5-7 clusters; Skeptic handles this range well. Graceful degradation if any advocate fails. |
+| **Briefing rendering** | Using marked.js for Markdown→HTML conversion in the browser. Works reliably across all tested environments. |
 
 ---
 
-*Last updated: March 2026*
+## Build Phases (Completed)
+
+All phases have been implemented and are in production.
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| **Phase 1** | Pipeline skeleton, types, orchestrator | ✓ Complete |
+| **Phase 2** | Synthesis Layer, OpenRouter client, parallel execution | ✓ Complete |
+| **Phase 3** | Clustering + Tournament (Advocates, Skeptic, Rebuttals) | ✓ Complete |
+| **Phase 4** | Synthesis Agent, Briefing formatter, Bun server, UI | ✓ Complete |
+| **Phase 5** | Integration, tuning, Translation Agent | ✓ Complete |
+| **Production** | SQLite persistence, API auth, rate limiting, dashboard | ✓ Complete |
+
+---
+
+*Last updated: March 2026 (updated to reflect production state and agentic design patterns)*
