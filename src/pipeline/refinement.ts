@@ -19,12 +19,13 @@ import { logger as baseLogger, type Logger } from '../utils/logger';
  */
 export async function assessQuery(
   query: string,
-  runLogger?: Logger
+  runLogger?: Logger,
+  runId?: string
 ): Promise<QueryAssessment> {
   const log = runLogger || baseLogger;
   log.info({ query: query.substring(0, 100) }, 'Assessing query quality');
 
-  const result = await assessQueryQuality(query, log);
+  const result = await assessQueryQuality(query, log, runId);
 
   log.info(
     {
@@ -47,12 +48,13 @@ export async function assessQuery(
 export async function getFollowUpQuestions(
   query: string,
   missingCriteria: string[],
-  runLogger?: Logger
+  runLogger?: Logger,
+  runId?: string
 ): Promise<RefinementQuestion[]> {
   const log = runLogger || baseLogger;
   log.info({ missingCount: missingCriteria.length }, 'Generating follow-up questions');
 
-  const questions = await generateRefinementQuestions(query, missingCriteria, log);
+  const questions = await generateRefinementQuestions(query, missingCriteria, log, runId);
 
   log.info({ questionCount: questions.length }, 'Follow-up questions generated');
 
@@ -65,12 +67,13 @@ export async function getFollowUpQuestions(
 export async function rewriteUserQuery(
   originalQuery: string,
   answers: Array<{ question: string; answer: string }>,
-  runLogger?: Logger
+  runLogger?: Logger,
+  runId?: string
 ): Promise<string> {
   const log = runLogger || baseLogger;
   log.info({ answerCount: answers.length }, 'Rewriting query with user context');
 
-  const refined = await rewriteQuery(originalQuery, answers, log);
+  const refined = await rewriteQuery(originalQuery, answers, log, runId);
 
   log.info({ refinedLength: refined.length }, 'Query rewrite complete');
 

@@ -30,6 +30,7 @@ interface TournamentConfig {
   clusters: Cluster[];
   responses: RawResponse[];
   runLogger?: Logger;
+  runId?: string;
   // SSE callbacks
   onAdvocateComplete?: (clusterId: number, clusterName: string, success: boolean) => void;
   onSkepticComplete?: (challengeCount: number) => void;
@@ -47,13 +48,13 @@ interface TournamentResult {
  * @returns Complete debate transcript for all clusters
  */
 export async function runTournament(config: TournamentConfig): Promise<TournamentResult> {
-  const { query, clusters, responses, runLogger } = config;
+  const { query, clusters, responses, runLogger, runId } = config;
   const log = runLogger || baseLogger;
 
   log.info({ clusterCount: clusters.length }, 'Tournament starting');
 
   // Phase 3a: Run all advocates in parallel
-  const advocateResults = await runAdvocates(query, clusters, responses, log, config.onAdvocateComplete);
+  const advocateResults = await runAdvocates(query, clusters, responses, log, config.onAdvocateComplete, runId);
   const successfulAdvocates = advocateResults.filter((r) => r.success);
 
   log.info(
@@ -75,7 +76,7 @@ export async function runTournament(config: TournamentConfig): Promise<Tournamen
   let skepticFailed = false;
 
   try {
-    challenges = await runSkeptic(query, advocateArgs, log);
+    challenges = await runSkeptic(query, advocateArgs, log, runId);
     config.onSkepticComplete?.(challenges.length);
     log.info({ challengeCount: challenges.length }, 'Skeptic complete');
   } catch (error) {
@@ -92,7 +93,7 @@ export async function runTournament(config: TournamentConfig): Promise<Tournamen
   // Phase 3c: Run all rebuttals in parallel (skip if skeptic failed — no challenges)
   let rebuttals: RebuttalResult[] = [];
   if (!skepticFailed) {
-    rebuttals = await runRebuttals(query, advocateArgs, challenges, log, config.onRebuttalComplete);
+    rebuttals = await runRebuttals(query, advocateArgs, challenges, log, config.onRebuttalComplete, runId);
 
     const successfulRebuttals = rebuttals.filter((r) => r.success).length;
     log.info({ total: advocateArgs.length, successful: successfulRebuttals }, 'Rebuttals complete');
@@ -125,7 +126,8 @@ async function runAdvocates(
   clusters: Cluster[],
   responses: RawResponse[],
   log: Logger,
-  onAdvocateComplete?: (clusterId: number, clusterName: string, success: boolean) => void
+  onAdvocateComplete?: (clusterId: number, clusterName: string, success: boolean) => void,
+  runId?: string
 ): Promise<AdvocateResult[]> {
   const promises = clusters.map(async (cluster): Promise<AdvocateResult> => {
     try {
@@ -137,7 +139,9 @@ async function runAdvocates(
         cluster.name,
         cluster.summary,
         topMemberContents,
-        log
+        log,
+        runId,
+        cluster.id
       );
 
       onAdvocateComplete?.(cluster.id, cluster.name, true);
@@ -177,7 +181,8 @@ async function runAdvocates(
 async function runSkeptic(
   query: string,
   advocateArgs: AdvocateArgument[],
-  log: Logger
+  log: Logger,
+  runId?: string
 ): Promise<SkepticChallenge[]> {
   const advocateInputs = advocateArgs.map((a) => ({
     clusterId: a.clusterId,
@@ -185,7 +190,7 @@ async function runSkeptic(
     argument: a.argument,
   }));
 
-  const challenges = await generateSkepticChallenges(query, advocateInputs, log);
+  const challenges = await generateSkepticChallenges(query, advocateInputs, log, runId);
 
   return challenges;
 }
@@ -205,7 +210,8 @@ async function runRebuttals(
   advocateArgs: AdvocateArgument[],
   challenges: SkepticChallenge[],
   log: Logger,
-  onRebuttalComplete?: (clusterId: number, clusterName: string, success: boolean) => void
+  onRebuttalComplete?: (clusterId: number, clusterName: string, success: boolean) => void,
+  runId?: string
 ): Promise<RebuttalResult[]> {
   const promises = advocateArgs.map(async (arg): Promise<RebuttalResult> => {
     const challenge = challenges.find((c) => c.clusterId === arg.clusterId);
@@ -225,7 +231,9 @@ async function runRebuttals(
         arg.clusterName,
         arg.argument,
         challenge.challenge,
-        log
+        log,
+        runId,
+        arg.clusterId
       );
 
       onRebuttalComplete?.(arg.clusterId, arg.clusterName, true);

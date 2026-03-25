@@ -22,13 +22,14 @@ import { logger as baseLogger, type Logger } from '../utils/logger';
 export async function generateDomains(
   query: string,
   runLogger?: Logger,
-  onDomainsReady?: (domains: Domain[]) => void
+  onDomainsReady?: (domains: Domain[]) => void,
+  runId?: string
 ): Promise<Domain[]> {
   const log = runLogger || baseLogger;
 
   log.info({ queryPreview: query.substring(0, 100) }, 'Prep agent starting domain generation');
 
-  const domains = await generateDomainsWithClaude(query, log);
+  const domains = await generateDomainsWithClaude(query, log, runId);
 
   // Emit domains for SSE streaming
   onDomainsReady?.(domains);

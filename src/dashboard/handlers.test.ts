@@ -8,6 +8,7 @@ import { runMigrations } from '../db/migrations';
 import { migrations } from '../db/schema';
 import { createRun, updateRun } from '../db/runs';
 import { clearCache } from './cache';
+import { resetAllBreakers } from '../resilience/circuit-breaker';
 import {
   getSummary,
   getRecentRuns,
@@ -23,6 +24,7 @@ function setup() {
   const db = getDatabase();
   runMigrations(db, migrations);
   clearCache();
+  resetAllBreakers();
 }
 
 function teardown() {

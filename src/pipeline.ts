@@ -21,7 +21,7 @@ import { createRunLogger } from './utils/logger';
 import { withSpan } from './observability/spans';
 import { getTracer } from './observability/tracing';
 import { withTimeout, TIMEOUTS } from './resilience/timeout';
-import { createRun, updateRun } from './db';
+import { createRun, updateRun, initDatabase } from './db';
 
 export interface PipelineResult {
   briefing: Briefing;
@@ -46,6 +46,9 @@ export async function runPipeline(
   const runId = crypto.randomUUID();
   const runLogger = createRunLogger(runId);
   const tracer = getTracer();
+
+  // Ensure DB is initialised (idempotent — safe to call multiple times)
+  initDatabase();
 
   // Persist run to database
   createRun({ id: runId, query, startedAt: new Date().toISOString() });
@@ -108,7 +111,7 @@ export async function runPipeline(
               domains: generatedDomains.map(d => ({ name: d.name, description: d.description, focus: d.focus })),
             },
           });
-        });
+        }, runId);
       }, { tracer });
 
       stageDurations.prep = Date.now() - prepStart;
@@ -124,7 +127,7 @@ export async function runPipeline(
         span.setAttribute('synthesis.domain_count', domains.length);
         return withTimeout(
           () => generateSynthesisMatrix(
-            { query, domains, concurrencyLimit, runLogger },
+            { query, domains, concurrencyLimit, runLogger, runId },
             (current, total) => {
               emit('synthesis', 'progress', `${current}/${total} calls completed`, { progress: { current, total } });
             },
@@ -159,7 +162,7 @@ export async function runPipeline(
               clusters: identifiedClusters.map(c => ({ id: c.id, name: c.name, memberCount: c.memberIndices.length })),
             },
           });
-        });
+        }, runId);
       }, { tracer });
 
       stageDurations.clustering = Date.now() - clusteringStart;
@@ -182,6 +185,7 @@ export async function runPipeline(
           clusters,
           responses,
           runLogger,
+          runId,
           onAdvocateComplete: (clusterId, clusterName, success) => {
             advocatesCompleted++;
             emit('tournament', 'progress', `Advocate ${advocatesCompleted}/${totalClusters}: ${clusterName}`, {
@@ -228,6 +232,7 @@ export async function runPipeline(
           debateEntries,
           stats: partialStats,
           runLogger,
+          runId,
           onIdeasReady: (ideas) => {
             emit('synthesizer', 'progress', `Selected ${ideas.length} ideas`, {
               detail: {
@@ -263,6 +268,7 @@ export async function runPipeline(
           return translateBriefing({
             briefing,
             runLogger,
+            runId,
             onTranslationReady: (ideas) => {
               emit('translation', 'progress', `Translated ${ideas.length} ideas`, {
                 detail: {
@@ -347,7 +353,7 @@ async function main() {
 
   const result = await runPipeline(
     { query, verbose: true },
-    (progress) => {
+    (_progress) => {
       // Progress is logged by the verbose flag
     }
   );

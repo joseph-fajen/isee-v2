@@ -25,7 +25,8 @@ export async function clusterResponses(
   responses: RawResponse[],
   query: string,
   runLogger?: Logger,
-  onClustersReady?: (clusters: Cluster[]) => void
+  onClustersReady?: (clusters: Cluster[]) => void,
+  runId?: string
 ): Promise<Cluster[]> {
   const log = runLogger || baseLogger;
 
@@ -34,7 +35,7 @@ export async function clusterResponses(
 
   log.info({ responseCount: anonymized.length }, 'Clustering agent starting');
 
-  const clusters = await clusterResponsesWithClaude(query, anonymized, log);
+  const clusters = await clusterResponsesWithClaude(query, anonymized, log, runId);
 
   // Validate all indices are assigned
   const validation = validateClusterAssignments(clusters, responses.length);

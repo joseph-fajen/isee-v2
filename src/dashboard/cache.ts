@@ -10,8 +10,7 @@ interface CacheEntry<T> {
   expiresAt: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const cache = new Map<string, CacheEntry<any>>();
+const cache = new Map<string, CacheEntry<unknown>>();
 
 /**
  * Retrieve a cached value by key.

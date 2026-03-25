@@ -24,6 +24,7 @@ interface SynthesizerConfig {
   stats: Partial<RunStats>;
   runLogger?: Logger;
   onIdeasReady?: (ideas: ExtractedIdea[]) => void;
+  runId?: string;
 }
 
 /**
@@ -33,13 +34,13 @@ interface SynthesizerConfig {
  * @returns Complete briefing document
  */
 export async function generateBriefing(config: SynthesizerConfig): Promise<Briefing> {
-  const { query, domains, debateEntries, stats, runLogger, onIdeasReady } = config;
+  const { query, domains, debateEntries, stats, runLogger, onIdeasReady, runId } = config;
   const log = runLogger || baseLogger;
 
   log.info({ debateEntryCount: debateEntries.length }, 'Synthesis agent starting');
 
   // Call the LLM to select and explain 3 ideas
-  const ideas = await generateBriefingWithClaude(query, debateEntries, log);
+  const ideas = await generateBriefingWithClaude(query, debateEntries, log, runId);
 
   // Emit ideas for SSE streaming
   onIdeasReady?.(ideas);

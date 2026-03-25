@@ -14,6 +14,7 @@ import { calculateCost } from '../observability/cost';
 import { DEFAULT_RETRY_CONFIG, isRetryableError, calculateDelay } from '../resilience/retry';
 import { TIMEOUTS, createTimeoutSignal } from '../resilience/timeout';
 import { getCircuitBreaker, CircuitOpenError } from '../resilience/circuit-breaker';
+import { logLlmCall } from '../db/llm-calls';
 
 // Lazy initialization to avoid errors when env vars not set
 let client: OpenAI | null = null;
@@ -46,6 +47,8 @@ export interface OpenRouterCallOptions {
     domain: string;
     callIndex: number;
   };
+  /** Run ID for database logging */
+  runId?: string;
 }
 
 export interface OpenRouterResult {
@@ -63,7 +66,7 @@ export interface OpenRouterResult {
  * Throws CircuitOpenError immediately if the OpenRouter circuit is open.
  */
 export async function callOpenRouter(options: OpenRouterCallOptions): Promise<OpenRouterResult> {
-  const { model, prompt, maxTokens = 1500, logger, context } = options;
+  const { model, prompt, maxTokens = 1500, logger, context, runId } = options;
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const breaker = getCircuitBreaker('openrouter');
 
@@ -111,6 +114,23 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
       setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, content.length);
 
+      if (runId) {
+        logLlmCall({
+          runId,
+          stage: 'synthesis',
+          provider: 'openrouter',
+          model,
+          inputTokens,
+          outputTokens,
+          latencyMs: durationMs,
+          success: true,
+          costUsd,
+          framework: context.framework,
+          domain: context.domain,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       return {
         content,
         model,
@@ -134,6 +154,21 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
+        if (runId) {
+          logLlmCall({
+            runId,
+            stage: 'synthesis',
+            provider: 'openrouter',
+            model,
+            latencyMs: Date.now() - startTime,
+            success: false,
+            errorType: error instanceof Error ? error.constructor.name : 'Error',
+            errorMessage,
+            framework: context.framework,
+            domain: context.domain,
+            timestamp: new Date().toISOString(),
+          });
+        }
         throw new Error(`OpenRouter call failed after ${attempt} attempt(s): ${errorMessage}`);
       }
 

@@ -159,7 +159,6 @@ export function updateRun(id: string, updates: Partial<RunRecord>): void {
   if (setClauses.length === 0) return;
 
   values.push(id);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db.prepare(`UPDATE runs SET ${setClauses.join(', ')} WHERE id = ?`).run(...(values as any[]));
 }
 

@@ -21,6 +21,7 @@ import {
 } from '../utils/logger';
 
 interface SynthesisConfig {
+  runId?: string;
   query: string;
   domains: Domain[];
   concurrencyLimit?: number;
@@ -46,7 +47,7 @@ export async function generateSynthesisMatrix(
     error?: string;
   }) => void
 ): Promise<RawResponse[]> {
-  const { query, domains, concurrencyLimit = 15, runLogger } = config;
+  const { query, domains, concurrencyLimit = 15, runLogger, runId } = config;
   const log = runLogger || baseLogger;
 
   // Build combination list
@@ -86,6 +87,7 @@ export async function generateSynthesisMatrix(
             domain: combo.domain.name,
             callIndex: index,
           },
+          runId,
         });
 
         const response: RawResponse = {
@@ -224,6 +226,6 @@ function buildCombinations(domains: Domain[]): Combination[] {
 /**
  * Calculate expected number of API calls for a given configuration.
  */
-export function estimateCallCount(domainCount: number): number {
+export function estimateCallCount(_domainCount: number): number {
   return MODELS.length * FRAMEWORKS.length; // ~66 with 6 models × 11 frameworks
 }

@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { getDatabase, closeDatabase } from '../db/connection';
 import { runMigrations } from '../db/migrations';
 import { migrations } from '../db/schema';
-import { createApiKey } from '../db/api-keys';
+import { createApiKey as _createApiKey } from '../db/api-keys';
 import { applyRateLimit, withRateLimitHeaders, isRateLimitEnabled } from './rate-limit-middleware';
 import type { AuthResult } from '../auth/middleware';
 import type { ApiKey } from '../types';

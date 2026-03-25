@@ -19,6 +19,7 @@ interface TranslationConfig {
   briefing: Briefing;
   runLogger?: Logger;
   onTranslationReady?: (ideas: SimplifiedIdea[]) => void;
+  runId?: string;
 }
 
 /**
@@ -28,7 +29,7 @@ interface TranslationConfig {
  * @returns TranslatedBriefing with simplified ideas and original preserved
  */
 export async function translateBriefing(config: TranslationConfig): Promise<TranslatedBriefing> {
-  const { briefing, runLogger, onTranslationReady } = config;
+  const { briefing, runLogger, onTranslationReady, runId } = config;
   const log = runLogger || baseLogger;
 
   log.info({ ideaCount: briefing.ideas.length }, 'Translation agent starting');
@@ -36,7 +37,8 @@ export async function translateBriefing(config: TranslationConfig): Promise<Tran
   const result = await translateBriefingWithClaude(
     briefing.query,
     briefing.ideas,
-    log
+    log,
+    runId
   );
 
   // Emit translated ideas for SSE streaming

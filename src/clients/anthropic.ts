@@ -17,6 +17,7 @@ import { calculateCost } from '../observability/cost';
 import { DEFAULT_RETRY_CONFIG, isRetryableError, calculateDelay } from '../resilience/retry';
 import { TIMEOUTS, createTimeoutSignal } from '../resilience/timeout';
 import { getCircuitBreaker, CircuitOpenError } from '../resilience/circuit-breaker';
+import { logLlmCall } from '../db/llm-calls';
 import {
   buildPrepAgentPrompt,
   buildClusteringPrompt,
@@ -127,7 +128,7 @@ const getBreaker = () => getCircuitBreaker('anthropic');
 /**
  * Generate knowledge domains for a query using structured output.
  */
-export async function generateDomainsWithClaude(query: string, logger: Logger): Promise<Domain[]> {
+export async function generateDomainsWithClaude(query: string, logger: Logger, runId?: string): Promise<Domain[]> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildPrepAgentPrompt({ query });
 
@@ -173,13 +174,15 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
         );
       }
 
-      setLLMResultAttributes(span, {
-        inputTokens: response.usage?.input_tokens,
-        outputTokens: response.usage?.output_tokens,
-        latencyMs: durationMs,
-        success: true,
-      });
+      const inputTokens = response.usage?.input_tokens;
+      const outputTokens = response.usage?.output_tokens;
+      const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
+      setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(domains).length);
+
+      if (runId) {
+        logLlmCall({ runId, stage: 'prep', provider: 'anthropic', model: AGENT_MODEL, inputTokens, outputTokens, latencyMs: durationMs, success: true, costUsd, timestamp: new Date().toISOString() });
+      }
 
       return domains;
     } catch (error) {
@@ -191,6 +194,9 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
+        if (runId) {
+          logLlmCall({ runId, stage: 'prep', provider: 'anthropic', model: AGENT_MODEL, latencyMs: Date.now() - startTime, success: false, errorType: error instanceof Error ? error.constructor.name : 'Error', errorMessage, timestamp: new Date().toISOString() });
+        }
         throw new Error(`Prep Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
@@ -210,7 +216,8 @@ export async function generateDomainsWithClaude(query: string, logger: Logger): 
 export async function clusterResponsesWithClaude(
   query: string,
   anonymizedResponses: Array<{ index: number; content: string }>,
-  logger: Logger
+  logger: Logger,
+  runId?: string
 ): Promise<Cluster[]> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildClusteringPrompt({ query, responses: anonymizedResponses });
@@ -260,6 +267,10 @@ export async function clusterResponsesWithClaude(
       setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(clusters).length);
 
+      if (runId) {
+        logLlmCall({ runId, stage: 'clustering', provider: 'anthropic', model: AGENT_MODEL, inputTokens, outputTokens, latencyMs: durationMs, success: true, costUsd, timestamp: new Date().toISOString() });
+      }
+
       return clusters;
     } catch (error) {
       if (error instanceof CircuitOpenError) throw error;
@@ -270,6 +281,9 @@ export async function clusterResponsesWithClaude(
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
+        if (runId) {
+          logLlmCall({ runId, stage: 'clustering', provider: 'anthropic', model: AGENT_MODEL, latencyMs: Date.now() - startTime, success: false, errorType: error instanceof Error ? error.constructor.name : 'Error', errorMessage, timestamp: new Date().toISOString() });
+        }
         throw new Error(`Clustering Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
@@ -290,7 +304,9 @@ export async function generateAdvocateArgument(
   clusterName: string,
   clusterSummary: string,
   topMemberResponses: string[],
-  logger: Logger
+  logger: Logger,
+  runId?: string,
+  clusterId?: number
 ): Promise<string> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildAdvocatePrompt({ query, clusterName, clusterSummary, topMemberResponses });
@@ -331,6 +347,10 @@ export async function generateAdvocateArgument(
       setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
 
+      if (runId) {
+        logLlmCall({ runId, stage: 'advocate', provider: 'anthropic', model: AGENT_MODEL, inputTokens, outputTokens, latencyMs: durationMs, success: true, costUsd, clusterId, timestamp: new Date().toISOString() });
+      }
+
       return text;
     } catch (error) {
       if (error instanceof CircuitOpenError) throw error;
@@ -341,6 +361,9 @@ export async function generateAdvocateArgument(
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
+        if (runId) {
+          logLlmCall({ runId, stage: 'advocate', provider: 'anthropic', model: AGENT_MODEL, latencyMs: Date.now() - startTime, success: false, errorType: error instanceof Error ? error.constructor.name : 'Error', errorMessage, clusterId, timestamp: new Date().toISOString() });
+        }
         throw new Error(`Advocate failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
@@ -359,7 +382,8 @@ export async function generateAdvocateArgument(
 export async function generateSkepticChallenges(
   query: string,
   advocateArguments: Array<{ clusterId: number; clusterName: string; argument: string }>,
-  logger: Logger
+  logger: Logger,
+  runId?: string
 ): Promise<SkepticChallenge[]> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildSkepticPrompt({ query, advocateArguments });
@@ -401,6 +425,10 @@ export async function generateSkepticChallenges(
       setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(challenges).length);
 
+      if (runId) {
+        logLlmCall({ runId, stage: 'skeptic', provider: 'anthropic', model: AGENT_MODEL, inputTokens, outputTokens, latencyMs: durationMs, success: true, costUsd, timestamp: new Date().toISOString() });
+      }
+
       return challenges;
     } catch (error) {
       if (error instanceof CircuitOpenError) throw error;
@@ -411,6 +439,9 @@ export async function generateSkepticChallenges(
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
+        if (runId) {
+          logLlmCall({ runId, stage: 'skeptic', provider: 'anthropic', model: AGENT_MODEL, latencyMs: Date.now() - startTime, success: false, errorType: error instanceof Error ? error.constructor.name : 'Error', errorMessage, timestamp: new Date().toISOString() });
+        }
         throw new Error(`Skeptic Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
@@ -431,7 +462,9 @@ export async function generateRebuttal(
   clusterName: string,
   advocateArgument: string,
   skepticChallenge: string,
-  logger: Logger
+  logger: Logger,
+  runId?: string,
+  clusterId?: number
 ): Promise<string> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildRebuttalPrompt({ query, clusterName, advocateArgument, skepticChallenge });
@@ -472,6 +505,10 @@ export async function generateRebuttal(
       setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
 
+      if (runId) {
+        logLlmCall({ runId, stage: 'rebuttal', provider: 'anthropic', model: AGENT_MODEL, inputTokens, outputTokens, latencyMs: durationMs, success: true, costUsd, clusterId, timestamp: new Date().toISOString() });
+      }
+
       return text;
     } catch (error) {
       if (error instanceof CircuitOpenError) throw error;
@@ -482,6 +519,9 @@ export async function generateRebuttal(
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
+        if (runId) {
+          logLlmCall({ runId, stage: 'rebuttal', provider: 'anthropic', model: AGENT_MODEL, latencyMs: Date.now() - startTime, success: false, errorType: error instanceof Error ? error.constructor.name : 'Error', errorMessage, clusterId, timestamp: new Date().toISOString() });
+        }
         throw new Error(`Rebuttal failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
@@ -499,7 +539,8 @@ export async function generateRebuttal(
  */
 export async function assessQueryQuality(
   query: string,
-  logger: Logger
+  logger: Logger,
+  runId?: string
 ): Promise<{ sufficient: boolean; missingCriteria: string[]; reasoning: string }> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildAssessmentPrompt({ query });
@@ -530,6 +571,9 @@ export async function assessQueryQuality(
       const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
       setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
+      if (runId) {
+        logLlmCall({ runId, stage: 'refinement', provider: 'anthropic', model: AGENT_MODEL, inputTokens, outputTokens, latencyMs: durationMs, success: true, costUsd, timestamp: new Date().toISOString() });
+      }
       return response.parsed_output;
     } catch (error) {
       if (error instanceof CircuitOpenError) throw error;
@@ -537,7 +581,12 @@ export async function assessQueryQuality(
       const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
-      if (!willRetry) throw new Error(`Query assessment failed after ${maxAttempts} attempts: ${errorMessage}`);
+      if (!willRetry) {
+        if (runId) {
+          logLlmCall({ runId, stage: 'refinement', provider: 'anthropic', model: AGENT_MODEL, latencyMs: Date.now() - startTime, success: false, errorType: error instanceof Error ? error.constructor.name : 'Error', errorMessage, timestamp: new Date().toISOString() });
+        }
+        throw new Error(`Query assessment failed after ${maxAttempts} attempts: ${errorMessage}`);
+      }
       await new Promise(resolve => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
@@ -552,7 +601,8 @@ export async function assessQueryQuality(
 export async function generateRefinementQuestions(
   query: string,
   missingCriteria: string[],
-  logger: Logger
+  logger: Logger,
+  runId?: string
 ): Promise<Array<{ targetsCriterion: string; question: string }>> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildQuestionGeneratorPrompt({ query, missingCriteria });
@@ -583,6 +633,9 @@ export async function generateRefinementQuestions(
       const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
       setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(response.parsed_output).length);
+      if (runId) {
+        logLlmCall({ runId, stage: 'refinement', provider: 'anthropic', model: AGENT_MODEL, inputTokens, outputTokens, latencyMs: durationMs, success: true, costUsd, timestamp: new Date().toISOString() });
+      }
       return response.parsed_output.questions;
     } catch (error) {
       if (error instanceof CircuitOpenError) throw error;
@@ -590,7 +643,12 @@ export async function generateRefinementQuestions(
       const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
-      if (!willRetry) throw new Error(`Question generation failed after ${maxAttempts} attempts: ${errorMessage}`);
+      if (!willRetry) {
+        if (runId) {
+          logLlmCall({ runId, stage: 'refinement', provider: 'anthropic', model: AGENT_MODEL, latencyMs: Date.now() - startTime, success: false, errorType: error instanceof Error ? error.constructor.name : 'Error', errorMessage, timestamp: new Date().toISOString() });
+        }
+        throw new Error(`Question generation failed after ${maxAttempts} attempts: ${errorMessage}`);
+      }
       await new Promise(resolve => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
@@ -605,7 +663,8 @@ export async function generateRefinementQuestions(
 export async function rewriteQuery(
   originalQuery: string,
   answers: Array<{ question: string; answer: string }>,
-  logger: Logger
+  logger: Logger,
+  runId?: string
 ): Promise<string> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildRewriterPrompt({ originalQuery, answers });
@@ -637,6 +696,9 @@ export async function rewriteQuery(
       const costUsd = (inputTokens && outputTokens) ? calculateCost(AGENT_MODEL, inputTokens, outputTokens) : undefined;
       setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, text.length);
+      if (runId) {
+        logLlmCall({ runId, stage: 'refinement', provider: 'anthropic', model: AGENT_MODEL, inputTokens, outputTokens, latencyMs: durationMs, success: true, costUsd, timestamp: new Date().toISOString() });
+      }
       return text.trim();
     } catch (error) {
       if (error instanceof CircuitOpenError) throw error;
@@ -644,7 +706,12 @@ export async function rewriteQuery(
       const willRetry = attempt < maxAttempts && isRetryableError(error);
       setLLMResultAttributes(span, { latencyMs: Date.now() - startTime, success: false, error: errorMessage });
       logLLMCallError(logger, callContext, errorMessage, willRetry);
-      if (!willRetry) throw new Error(`Query rewrite failed after ${maxAttempts} attempts: ${errorMessage}`);
+      if (!willRetry) {
+        if (runId) {
+          logLlmCall({ runId, stage: 'refinement', provider: 'anthropic', model: AGENT_MODEL, latencyMs: Date.now() - startTime, success: false, errorType: error instanceof Error ? error.constructor.name : 'Error', errorMessage, timestamp: new Date().toISOString() });
+        }
+        throw new Error(`Query rewrite failed after ${maxAttempts} attempts: ${errorMessage}`);
+      }
       await new Promise(resolve => setTimeout(resolve, calculateDelay(attempt, DEFAULT_RETRY_CONFIG)));
     } finally {
       span.end();
@@ -659,7 +726,8 @@ export async function rewriteQuery(
 export async function generateBriefingWithClaude(
   query: string,
   debateEntries: DebateEntry[],
-  logger: Logger
+  logger: Logger,
+  runId?: string
 ): Promise<ExtractedIdea[]> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildSynthesisPrompt({ query, debateEntries });
@@ -709,6 +777,10 @@ export async function generateBriefingWithClaude(
       setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(ideas).length);
 
+      if (runId) {
+        logLlmCall({ runId, stage: 'synthesizer', provider: 'anthropic', model: AGENT_MODEL, inputTokens, outputTokens, latencyMs: durationMs, success: true, costUsd, timestamp: new Date().toISOString() });
+      }
+
       return ideas;
     } catch (error) {
       if (error instanceof CircuitOpenError) throw error;
@@ -719,6 +791,9 @@ export async function generateBriefingWithClaude(
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
+        if (runId) {
+          logLlmCall({ runId, stage: 'synthesizer', provider: 'anthropic', model: AGENT_MODEL, latencyMs: Date.now() - startTime, success: false, errorType: error instanceof Error ? error.constructor.name : 'Error', errorMessage, timestamp: new Date().toISOString() });
+        }
         throw new Error(`Synthesis Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 
@@ -737,7 +812,8 @@ export async function generateBriefingWithClaude(
 export async function translateBriefingWithClaude(
   query: string,
   ideas: ExtractedIdea[],
-  logger: Logger
+  logger: Logger,
+  runId?: string
 ): Promise<{ queryPlainLanguage: string; ideas: SimplifiedIdea[] }> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const prompt = buildTranslationPrompt({ query, ideas });
@@ -787,6 +863,10 @@ export async function translateBriefingWithClaude(
       setLLMResultAttributes(span, { inputTokens, outputTokens, costUsd, latencyMs: durationMs, success: true });
       logLLMCallSuccess(logger, callContext, durationMs, JSON.stringify(result).length);
 
+      if (runId) {
+        logLlmCall({ runId, stage: 'translation', provider: 'anthropic', model: AGENT_MODEL, inputTokens, outputTokens, latencyMs: durationMs, success: true, costUsd, timestamp: new Date().toISOString() });
+      }
+
       return result;
     } catch (error) {
       if (error instanceof CircuitOpenError) throw error;
@@ -797,6 +877,9 @@ export async function translateBriefingWithClaude(
       logLLMCallError(logger, callContext, errorMessage, willRetry);
 
       if (!willRetry) {
+        if (runId) {
+          logLlmCall({ runId, stage: 'translation', provider: 'anthropic', model: AGENT_MODEL, latencyMs: Date.now() - startTime, success: false, errorType: error instanceof Error ? error.constructor.name : 'Error', errorMessage, timestamp: new Date().toISOString() });
+        }
         throw new Error(`Translation Agent failed after ${maxAttempts} attempts: ${errorMessage}`);
       }
 

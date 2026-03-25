@@ -39,10 +39,8 @@ describe('schema migrations', () => {
 });
 
 describe('initial_schema (v1)', () => {
-  let db: Database;
-
   // Apply the schema once for all tests in this block
-  db = freshDb();
+  const db = freshDb();
   runMigrations(db, migrations);
 
   test('runs table exists with expected columns', () => {
