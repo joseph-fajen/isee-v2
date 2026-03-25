@@ -292,7 +292,7 @@ export function getLatencyTimeSeries(bucketMinutes: number, lookbackHours: numbe
   ).all(since);
 
   return rows.map(r => {
-    const hasStages = r.avgPrep !== null;
+    const hasStages = r.avgPrep !== null || r.avgSynthesis !== null;
     return {
       timestamp: r.bucket + 'Z',
       avgLatencyMs: r.avgLatencyMs ?? 0,

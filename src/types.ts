@@ -371,6 +371,9 @@ export interface RunRecord {
   totalCostUsd?: number;
   openrouterCostUsd?: number;
   anthropicCostUsd?: number;
+
+  // Stage timing (JSON blob: { stageDurations: RunStats['stageDurations'] })
+  statsJson?: string;
 }
 
 /**

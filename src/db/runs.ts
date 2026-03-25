@@ -29,6 +29,7 @@ interface RunRow {
   total_cost_usd: number | null;
   openrouter_cost_usd: number | null;
   anthropic_cost_usd: number | null;
+  stats_json: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,7 @@ function rowToRecord(row: RunRow): RunRecord {
     ...(row.total_cost_usd != null && { totalCostUsd: row.total_cost_usd }),
     ...(row.openrouter_cost_usd != null && { openrouterCostUsd: row.openrouter_cost_usd }),
     ...(row.anthropic_cost_usd != null && { anthropicCostUsd: row.anthropic_cost_usd }),
+    ...(row.stats_json != null && { statsJson: row.stats_json }),
   };
 }
 
@@ -143,6 +145,7 @@ export function updateRun(id: string, updates: Partial<RunRecord>): void {
     totalCostUsd: 'total_cost_usd',
     openrouterCostUsd: 'openrouter_cost_usd',
     anthropicCostUsd: 'anthropic_cost_usd',
+    statsJson: 'stats_json',
   };
 
   const setClauses: string[] = [];

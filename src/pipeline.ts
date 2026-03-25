@@ -333,6 +333,7 @@ export async function runPipeline(
         totalCostUsd: costs.totalCostUsd,
         openrouterCostUsd: costs.openrouterCostUsd,
         anthropicCostUsd: costs.anthropicCostUsd,
+        statsJson: JSON.stringify({ stageDurations: briefing.stats.stageDurations }),
       });
 
       return { briefing, translatedBriefing, markdown };
