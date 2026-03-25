@@ -454,6 +454,15 @@ export interface LatencyPoint {
   avgLatencyMs: number;
   callCount: number;
   successRate: number;
+  /** Average stage durations across runs in this bucket (ms). Present when stats_json data is available. */
+  stageDurations?: {
+    prep: number;
+    synthesis: number;
+    clustering: number;
+    tournament: number;
+    synthesizer: number;
+    translation: number;
+  };
 }
 
 /**
