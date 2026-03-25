@@ -6,7 +6,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { getDatabase, closeDatabase } from '../db/connection';
 import { runMigrations } from '../db/migrations';
 import { migrations } from '../db/schema';
-import { createRun, updateRun } from '../db/runs';
+import { createRun, updateRun, markStaleRunsFailed } from '../db/runs';
 import { logLlmCall } from '../db/llm-calls';
 import { clearCache } from './cache';
 import { resetAllBreakers } from '../resilience/circuit-breaker';
@@ -69,6 +69,32 @@ describe('getSummary', () => {
 
     const summary = await getSummary();
     expect(summary.runsToday).toBe(2);
+  });
+
+  test('excludes stuck running runs from success rate after markStaleRunsFailed', async () => {
+    const now = new Date().toISOString();
+    const staleTime = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    createRun({ id: 'r1', query: 'q1', startedAt: now, status: 'completed' });
+    createRun({ id: 'r2', query: 'q2', startedAt: now, status: 'completed' });
+    createRun({ id: 'r3', query: 'q3', startedAt: staleTime }); // stuck 'running'
+
+    markStaleRunsFailed(10 * 60 * 1000); // 10 min timeout — marks r3 as failed
+
+    const summary = await getSummary();
+    expect(summary.totalRuns).toBe(3);
+    expect(summary.successRate).toBeCloseTo(66.67, 1); // 2 completed / 3 total
+  });
+
+  test('in-progress runs started recently are not marked as failed', async () => {
+    const now = new Date().toISOString();
+    createRun({ id: 'r1', query: 'q1', startedAt: now }); // status='running', recent
+
+    markStaleRunsFailed(10 * 60 * 1000);
+
+    // Fresh 'running' run is counted but not completed — success rate is 0
+    const summary = await getSummary();
+    expect(summary.totalRuns).toBe(1);
+    expect(summary.successRate).toBe(0);
   });
 
   test('caches result on second call', async () => {

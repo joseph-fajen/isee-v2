@@ -163,6 +163,28 @@ export function updateRun(id: string, updates: Partial<RunRecord>): void {
 }
 
 /**
+ * Mark any runs that are still 'running' after `timeoutMs` as 'failed'.
+ * Call this at server startup and/or before computing dashboard stats
+ * to fix orphaned runs from past crashes.
+ *
+ * @returns The number of rows updated.
+ */
+export function markStaleRunsFailed(timeoutMs: number): number {
+  const db = getDatabase();
+  const cutoff = new Date(Date.now() - timeoutMs).toISOString();
+  const result = db.prepare(`
+    UPDATE runs
+    SET status = 'failed',
+        completed_at = ?,
+        error_message = 'Run timed out or server restarted'
+    WHERE status = 'running'
+      AND started_at IS NOT NULL
+      AND started_at < ?
+  `).run(new Date().toISOString(), cutoff);
+  return result.changes;
+}
+
+/**
  * Returns a list of runs, optionally filtered by status and capped at a limit.
  * Results are ordered by `started_at` descending (most recent first).
  */

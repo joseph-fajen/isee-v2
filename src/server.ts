@@ -13,7 +13,13 @@ initTracing();
 
 // Initialize database (runs migrations)
 import { initDatabase } from './db';
+import { markStaleRunsFailed } from './db/runs';
+import { TIMEOUTS } from './resilience/timeout';
 initDatabase();
+const cleaned = markStaleRunsFailed(TIMEOUTS.FULL_PIPELINE_MS);
+if (cleaned > 0) {
+  console.log(`[server] Marked ${cleaned} stale run(s) as failed on startup`);
+}
 
 import { runPipeline } from './pipeline';
 import type { AnalyzeRequest, ApiResponse, Briefing, TranslatedBriefing, ProgressEvent, RefinementMetadata } from './types';
