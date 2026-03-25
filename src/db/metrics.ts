@@ -196,6 +196,26 @@ export function getDashboardSummaryStats(): DashboardSummaryRow {
   };
 }
 
+/**
+ * Get average cost per successful run within a lookback window.
+ * Returns 0 if no completed runs exist in the window.
+ */
+export function getAvgCostPerRun(lookbackHours: number): number {
+  const db = getDatabase();
+  const since = new Date(Date.now() - lookbackHours * 3_600_000).toISOString();
+
+  const row = db.query<{ avgCost: number | null }, [string]>(
+    `SELECT AVG(total_cost_usd) AS avgCost
+     FROM runs
+     WHERE status = 'completed'
+       AND total_cost_usd IS NOT NULL
+       AND total_cost_usd > 0
+       AND COALESCE(started_at, datetime(created_at / 1000, 'unixepoch')) >= ?`,
+  ).get(since);
+
+  return row?.avgCost ?? 0;
+}
+
 /** Get run count and cost for today (UTC). */
 export function getRunsToday(): { count: number; costUsd: number } {
   const db = getDatabase();

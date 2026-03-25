@@ -15,6 +15,7 @@ import {
   getModelStatistics,
   getCostBreakdownStats,
   getActiveRunCount,
+  getAvgCostPerRun,
 } from '../db/metrics';
 import { getRuns } from '../db/runs';
 import { getCircuitBreaker } from '../resilience/circuit-breaker';
@@ -46,9 +47,11 @@ const TTL_HEALTH = 10;
 /**
  * GET /api/dashboard/summary
  * Key metrics: run counts, success rate, latency, cost.
+ * @param period - Time window for avg cost calculation: '24h' | '7d'
  */
-export async function getSummary(): Promise<DashboardSummary> {
-  const cached = getCached<DashboardSummary>('summary');
+export async function getSummary(period: '24h' | '7d' = '7d'): Promise<DashboardSummary> {
+  const cacheKey = `summary:${period}`;
+  const cached = getCached<DashboardSummary>(cacheKey);
   if (cached) return cached;
 
   const stats = getDashboardSummaryStats();
@@ -61,6 +64,10 @@ export async function getSummary(): Promise<DashboardSummary> {
   const successRateChange = successRate - yesterday.successRate;
   const latencyChange = stats.avgLatencyMs - yesterday.avgLatencyMs;
 
+  // Compute avg cost per run for the selected period
+  const lookbackHours = period === '24h' ? 24 : 7 * 24;
+  const avgCostPerRunUsd = getAvgCostPerRun(lookbackHours);
+
   const result: DashboardSummary = {
     totalRuns: stats.totalRuns,
     runsToday: today.count,
@@ -70,10 +77,11 @@ export async function getSummary(): Promise<DashboardSummary> {
     latencyChange,
     totalCostUsd: stats.totalCostUsd,
     costToday: today.costUsd,
+    avgCostPerRunUsd,
     lastUpdated: new Date().toISOString(),
   };
 
-  setCache('summary', result, TTL_SUMMARY);
+  setCache(cacheKey, result, TTL_SUMMARY);
   return result;
 }
 

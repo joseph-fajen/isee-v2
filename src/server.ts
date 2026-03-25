@@ -431,7 +431,9 @@ async function routeRequest(req: Request, url: URL, path: string, method: string
     if (!authResult.ok) return authResult.response;
 
     try {
-      const data = await getSummary();
+      const raw = url.searchParams.get('period') || '7d';
+      const period = (raw === '24h' ? '24h' : '7d') as '24h' | '7d';
+      const data = await getSummary(period);
       return Response.json({ success: true, data });
     } catch (error) {
       return Response.json({ success: false, error: error instanceof Error ? error.message : 'Failed' }, { status: 500 });
