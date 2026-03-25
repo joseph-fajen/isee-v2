@@ -7,6 +7,7 @@ import { getDatabase, closeDatabase } from '../db/connection';
 import { runMigrations } from '../db/migrations';
 import { migrations } from '../db/schema';
 import { createRun, updateRun } from '../db/runs';
+import { logLlmCall } from '../db/llm-calls';
 import { clearCache } from './cache';
 import { resetAllBreakers } from '../resilience/circuit-breaker';
 import {
@@ -162,6 +163,55 @@ describe('getModelStats', () => {
     const s1 = await getModelStats();
     const s2 = await getModelStats();
     expect(s1).toEqual(s2);
+  });
+
+  test('calculates p95LatencyMs correctly for small sample (< 20 calls)', async () => {
+    const runId = 'p95-small';
+    createRun({ id: runId, query: 'test', startedAt: new Date().toISOString(), status: 'completed' });
+    // Insert 4 calls with latencies 100, 200, 300, 400
+    const latencies = [100, 200, 300, 400];
+    for (const latencyMs of latencies) {
+      logLlmCall({
+        runId,
+        stage: 'synthesis',
+        provider: 'openrouter',
+        model: 'test-model',
+        latencyMs,
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    clearCache();
+    const stats = await getModelStats();
+    const modelStat = stats.find(s => s.model === 'test-model');
+    expect(modelStat).toBeDefined();
+    // p95 of [100,200,300,400]: idx = ceil(4 * 0.95) - 1 = ceil(3.8) - 1 = 4 - 1 = 3 → value = 400
+    expect(modelStat!.p95LatencyMs).toBe(400);
+    expect(modelStat!.p95LatencyMs).not.toBe(0);
+  });
+
+  test('calculates p95LatencyMs correctly for larger sample', async () => {
+    const runId = 'p95-large';
+    createRun({ id: runId, query: 'test', startedAt: new Date().toISOString(), status: 'completed' });
+    // Insert 20 calls with latencies 100, 200, ..., 2000
+    for (let i = 1; i <= 20; i++) {
+      logLlmCall({
+        runId,
+        stage: 'synthesis',
+        provider: 'openrouter',
+        model: 'large-model',
+        latencyMs: i * 100,
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    clearCache();
+    const stats = await getModelStats();
+    const modelStat = stats.find(s => s.model === 'large-model');
+    expect(modelStat).toBeDefined();
+    // p95 of [100..2000]: idx = ceil(20 * 0.95) - 1 = ceil(19) - 1 = 19 - 1 = 18 → value = 1900
+    expect(modelStat!.p95LatencyMs).toBe(1900);
+    expect(modelStat!.p95LatencyMs).not.toBe(0);
   });
 });
 

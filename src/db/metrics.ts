@@ -316,25 +316,29 @@ export function getModelStatistics(): ModelStats[] {
      ORDER BY provider, model`,
   ).all();
 
-  // Get p95 approximation per provider+model using ordered subquery
-  const p95Rows = db.query<{ provider: string; model: string; p95: number }, []>(
-    `SELECT provider, model, latency_ms AS p95
-     FROM (
-       SELECT
-         provider,
-         model,
-         latency_ms,
-         NTILE(20) OVER (PARTITION BY provider, model ORDER BY latency_ms) AS tile
-       FROM llm_calls
-       WHERE latency_ms IS NOT NULL AND success = 1
-     )
-     WHERE tile = 19
-     GROUP BY provider, model`,
+  // Get p95 per provider+model using application-level percentile calculation.
+  // Fetching sorted latency values per model and computing percentile in TS
+  // is simpler and always correct regardless of sample size.
+  const latencyRows = db.query<{ provider: string; model: string; latency_ms: number }, []>(
+    `SELECT provider, model, latency_ms
+     FROM llm_calls
+     WHERE latency_ms IS NOT NULL AND success = 1
+     ORDER BY provider, model, latency_ms`,
   ).all();
 
+  const latencyGroups = new Map<string, number[]>();
+  for (const r of latencyRows) {
+    const key = `${r.provider}:${r.model}`;
+    const arr = latencyGroups.get(key) ?? [];
+    arr.push(r.latency_ms);
+    latencyGroups.set(key, arr);
+  }
+
   const p95Map = new Map<string, number>();
-  for (const r of p95Rows) {
-    p95Map.set(`${r.provider}:${r.model}`, r.p95);
+  for (const [key, values] of latencyGroups) {
+    // values is already sorted ASC by the SQL ORDER BY
+    const idx = Math.ceil(values.length * 0.95) - 1;
+    p95Map.set(key, values[Math.max(0, idx)]);
   }
 
   return rows.map(r => ({
