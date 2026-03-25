@@ -90,7 +90,8 @@ export async function runPipeline(
     log(`[${stage}] ${status}: ${message}`);
   };
 
-  return withTimeout(
+  try {
+    return await withTimeout(
     () => withSpan(
     'isee.pipeline.run',
     async (rootSpan) => {
@@ -340,6 +341,14 @@ export async function runPipeline(
   ),
     TIMEOUTS.FULL_PIPELINE_MS
   );
+  } catch (error) {
+    updateRun(runId, {
+      status: 'failed',
+      completedAt: new Date().toISOString(),
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw error;
+  }
 }
 
 /**

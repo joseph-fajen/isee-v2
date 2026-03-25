@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { getDatabase, closeDatabase } from './connection';
 import { runMigrations } from './migrations';
 import { migrations } from './schema';
-import { createRun, getRunById, updateRun, getRuns } from './runs';
+import { createRun, getRunById, updateRun, getRuns, markStaleRunsFailed } from './runs';
 import type { RunRecord } from '../types';
 
 function setup() {
@@ -106,6 +106,54 @@ describe('updateRun', () => {
     const record = getRunById('run-001');
     expect(record!.status).toBe('failed');
     expect(record!.errorMessage).toBe('Clustering agent timed out');
+  });
+});
+
+describe('markStaleRunsFailed', () => {
+  beforeEach(setup);
+  afterEach(teardown);
+
+  test('marks stale running runs as failed', () => {
+    const staleTime = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    createRun({ ...baseRun(), startedAt: staleTime });
+
+    const changed = markStaleRunsFailed(10 * 60 * 1000); // 10 min timeout
+
+    expect(changed).toBe(1);
+    const record = getRunById('run-001');
+    expect(record!.status).toBe('failed');
+    expect(record!.errorMessage).toBe('Run timed out or server restarted');
+    expect(record!.completedAt).toBeDefined();
+  });
+
+  test('does not mark recently started running runs as failed', () => {
+    const now = new Date().toISOString();
+    createRun({ ...baseRun(), startedAt: now });
+
+    const changed = markStaleRunsFailed(10 * 60 * 1000);
+
+    expect(changed).toBe(0);
+    const record = getRunById('run-001');
+    expect(record!.status).toBe('running');
+  });
+
+  test('does not affect already completed or failed runs', () => {
+    const staleTime = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    createRun({ ...baseRun(), id: 'run-a', startedAt: staleTime, status: 'completed' });
+    createRun({ ...baseRun(), id: 'run-b', startedAt: staleTime, status: 'failed' });
+
+    const changed = markStaleRunsFailed(10 * 60 * 1000);
+
+    expect(changed).toBe(0);
+  });
+
+  test('returns count of rows updated', () => {
+    const staleTime = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    createRun({ ...baseRun(), id: 'run-a', startedAt: staleTime });
+    createRun({ ...baseRun(), id: 'run-b', startedAt: staleTime });
+
+    const changed = markStaleRunsFailed(10 * 60 * 1000);
+    expect(changed).toBe(2);
   });
 });
 
