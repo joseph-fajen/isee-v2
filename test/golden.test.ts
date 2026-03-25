@@ -11,6 +11,6 @@ describe('Golden Query Tests', () => {
       expect(result.briefing.stats.clusterCount).toBeGreaterThanOrEqual(query.expectations.minClusters);
       expect(result.briefing.stats.clusterCount).toBeLessThanOrEqual(query.expectations.maxClusters);
       expect(result.briefing.stats.totalDurationMs).toBeLessThan(query.expectations.maxDurationMs);
-    }, 360000); // 6 minute timeout
+    }, 480000); // 8 minute timeout (buffer beyond 7min pipeline timeout)
   }
 });

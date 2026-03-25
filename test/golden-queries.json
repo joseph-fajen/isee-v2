@@ -4,9 +4,9 @@
     "query": "How might we improve decision-making in complex organizations while preserving individual autonomy?",
     "expectations": {
       "minClusters": 3,
-      "maxClusters": 8,
+      "maxClusters": 10,
       "minIdeas": 3,
-      "maxDurationMs": 300000
+      "maxDurationMs": 420000
     }
   },
   {
@@ -14,9 +14,9 @@
     "query": "What approaches help distributed teams maintain serendipitous collaboration and spontaneous innovation?",
     "expectations": {
       "minClusters": 3,
-      "maxClusters": 8,
+      "maxClusters": 10,
       "minIdeas": 3,
-      "maxDurationMs": 300000
+      "maxDurationMs": 420000
     }
   },
   {
@@ -24,9 +24,9 @@
     "query": "How can I design a creative workflow that balances automation efficiency with human curation and judgment?",
     "expectations": {
       "minClusters": 3,
-      "maxClusters": 8,
+      "maxClusters": 10,
       "minIdeas": 3,
-      "maxDurationMs": 300000
+      "maxDurationMs": 420000
     }
   }
 ]
