@@ -155,6 +155,21 @@ describe('markStaleRunsFailed', () => {
     const changed = markStaleRunsFailed(10 * 60 * 1000);
     expect(changed).toBe(2);
   });
+
+  test('does not affect running rows with NULL started_at (v1 legacy rows)', () => {
+    // Insert a legacy row directly, bypassing createRun which always sets started_at.
+    // This simulates a pre-v2 record where started_at was never populated.
+    const db = getDatabase();
+    db.prepare(
+      `INSERT INTO runs (id, query, status, created_at) VALUES (?, ?, 'running', ?)`
+    ).run('run-legacy', 'legacy query', Date.now());
+
+    const changed = markStaleRunsFailed(10 * 60 * 1000);
+
+    expect(changed).toBe(0);
+    const result = db.prepare(`SELECT status FROM runs WHERE id = ?`).get('run-legacy') as { status: string } | null;
+    expect(result?.status).toBe('running');
+  });
 });
 
 describe('getRuns', () => {
