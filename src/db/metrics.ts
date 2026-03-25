@@ -264,6 +264,12 @@ export function getLatencyTimeSeries(bucketMinutes: number, lookbackHours: numbe
     avgLatencyMs: number;
     callCount: number;
     successCount: number;
+    avgPrep: number | null;
+    avgSynthesis: number | null;
+    avgClustering: number | null;
+    avgTournament: number | null;
+    avgSynthesizer: number | null;
+    avgTranslation: number | null;
   }, [string]>(
     `SELECT
        datetime(
@@ -272,19 +278,38 @@ export function getLatencyTimeSeries(bucketMinutes: number, lookbackHours: numbe
        ) AS bucket,
        AVG(CASE WHEN status = 'completed' THEN duration_ms ELSE NULL END) AS avgLatencyMs,
        COUNT(*) AS callCount,
-       SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS successCount
+       SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS successCount,
+       AVG(CASE WHEN status = 'completed' THEN json_extract(stats_json, '$.stageDurations.prep') ELSE NULL END) AS avgPrep,
+       AVG(CASE WHEN status = 'completed' THEN json_extract(stats_json, '$.stageDurations.synthesis') ELSE NULL END) AS avgSynthesis,
+       AVG(CASE WHEN status = 'completed' THEN json_extract(stats_json, '$.stageDurations.clustering') ELSE NULL END) AS avgClustering,
+       AVG(CASE WHEN status = 'completed' THEN json_extract(stats_json, '$.stageDurations.tournament') ELSE NULL END) AS avgTournament,
+       AVG(CASE WHEN status = 'completed' THEN json_extract(stats_json, '$.stageDurations.synthesizer') ELSE NULL END) AS avgSynthesizer,
+       AVG(CASE WHEN status = 'completed' THEN json_extract(stats_json, '$.stageDurations.translation') ELSE NULL END) AS avgTranslation
      FROM runs
      WHERE COALESCE(started_at, datetime(created_at / 1000, 'unixepoch')) >= ?
      GROUP BY bucket
      ORDER BY bucket ASC`,
   ).all(since);
 
-  return rows.map(r => ({
-    timestamp: r.bucket + 'Z',
-    avgLatencyMs: r.avgLatencyMs ?? 0,
-    callCount: r.callCount,
-    successRate: r.callCount > 0 ? (r.successCount / r.callCount) * 100 : 0,
-  }));
+  return rows.map(r => {
+    const hasStages = r.avgPrep !== null || r.avgSynthesis !== null;
+    return {
+      timestamp: r.bucket + 'Z',
+      avgLatencyMs: r.avgLatencyMs ?? 0,
+      callCount: r.callCount,
+      successRate: r.callCount > 0 ? (r.successCount / r.callCount) * 100 : 0,
+      ...(hasStages && {
+        stageDurations: {
+          prep: r.avgPrep ?? 0,
+          synthesis: r.avgSynthesis ?? 0,
+          clustering: r.avgClustering ?? 0,
+          tournament: r.avgTournament ?? 0,
+          synthesizer: r.avgSynthesizer ?? 0,
+          translation: r.avgTranslation ?? 0,
+        },
+      }),
+    };
+  });
 }
 
 /**

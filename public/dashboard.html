@@ -329,12 +329,51 @@
       flex: 1;
       min-width: 4px;
       border-radius: 2px 2px 0 0;
-      background: var(--accent);
-      opacity: 0.7;
-      transition: opacity 0.15s;
+      display: flex;
+      flex-direction: column-reverse;
+      overflow: hidden;
+      cursor: default;
     }
 
-    .latency-bar:hover { opacity: 1; }
+    .latency-bar:hover .latency-segment { opacity: 1; }
+
+    .latency-segment {
+      width: 100%;
+      transition: opacity 0.15s;
+      opacity: 0.75;
+    }
+
+    /* Stage color tokens */
+    .latency-segment.prep        { background: #6366f1; }
+    .latency-segment.synthesis   { background: #06b6d4; }
+    .latency-segment.clustering  { background: #10b981; }
+    .latency-segment.tournament  { background: #f59e0b; }
+    .latency-segment.synthesizer { background: #ef4444; }
+    .latency-segment.translation { background: #8b5cf6; }
+    .latency-segment.total       { background: var(--accent); opacity: 0.7; }
+
+    /* Stage legend */
+    .stage-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
 
     .chart-empty {
       display: flex;
@@ -526,6 +565,14 @@
         </div>
         <div class="latency-chart" id="latency-chart">
           <div class="chart-empty">Loading…</div>
+        </div>
+        <div class="stage-legend" id="stage-legend" style="display:none">
+          <div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div>Prep</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#06b6d4"></div>Synthesis</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>Clustering</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Tournament</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Synthesizer</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6"></div>Translation</div>
         </div>
       </div>
 
@@ -774,19 +821,46 @@
       loadLatency();
     }
 
+    const STAGE_ORDER = ['prep', 'synthesis', 'clustering', 'tournament', 'synthesizer', 'translation'];
+
     function loadLatency() {
       return apiFetch(`/api/dashboard/latency?period=${latencyPeriod}`).then(points => {
         const chart = document.getElementById('latency-chart');
+        const legend = document.getElementById('stage-legend');
         if (!points.length) {
           chart.innerHTML = '<div class="chart-empty">No data for this period</div>';
+          legend.style.display = 'none';
           return;
         }
+
         const maxMs = Math.max(...points.map(p => p.avgLatencyMs)) || 1;
+        const hasStages = points.some(p => p.stageDurations);
+
+        if (hasStages) legend.style.display = '';
+        else legend.style.display = 'none';
+
         chart.innerHTML = '<div class="latency-bars">' +
           points.map(p => {
             const h = Math.max(4, Math.round((p.avgLatencyMs / maxMs) * 100));
-            const tip = `${new Date(p.timestamp).toLocaleString()} · avg ${fmtMs(p.avgLatencyMs)} · ${p.callCount} run${p.callCount !== 1 ? 's' : ''}`;
-            return `<div class="latency-bar" style="height:${h}%" title="${escHtml(tip)}"></div>`;
+            const ts = new Date(p.timestamp).toLocaleString();
+            const runs = `${p.callCount} run${p.callCount !== 1 ? 's' : ''}`;
+
+            if (p.stageDurations) {
+              const stages = STAGE_ORDER;
+              const tip = escHtml(
+                `${ts} · total ${fmtMs(p.avgLatencyMs)} · ${runs}\n` +
+                stages.map(s => `  ${s}: ${fmtMs(p.stageDurations[s])}`).join('\n')
+              );
+              const segments = stages.map(s => {
+                const pct = Math.round((p.stageDurations[s] / p.avgLatencyMs) * 100);
+                if (pct < 1) return '';
+                return `<div class="latency-segment ${s}" style="height:${pct}%" title="${escHtml(s + ': ' + fmtMs(p.stageDurations[s]))}"></div>`;
+              }).join('');
+              return `<div class="latency-bar" style="height:${h}%" title="${tip}">${segments}</div>`;
+            } else {
+              const tip = `${ts} · avg ${fmtMs(p.avgLatencyMs)} · ${runs}`;
+              return `<div class="latency-bar" style="height:${h}%" title="${escHtml(tip)}"><div class="latency-segment total" style="height:100%"></div></div>`;
+            }
           }).join('') +
           '</div>';
       }).catch(() => {
