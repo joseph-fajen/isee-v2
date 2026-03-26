@@ -38,3 +38,10 @@ data/
 
 # Personal analysis outputs
 fabric-outputs/
+
+# Personal reference docs
+docs/fictional-reviews.md
+EVALUATION.md
+
+# Design exploration (not for production)
+public/logo-concepts/
