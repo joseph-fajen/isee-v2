@@ -38,3 +38,8 @@ data/
 
 # Personal analysis outputs
 fabric-outputs/
+
+# Personal reference files
+EVALUATION.md
+docs/fictional-reviews.md
+public/logo-concepts/
