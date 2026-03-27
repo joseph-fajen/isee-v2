@@ -96,7 +96,7 @@ const SimplifiedIdeaSchema = z.object({
   title: z.string(),
   explanation: z.string(),
   whyForYou: z.string(),
-  actionItems: z.array(z.string()),
+  actionItems: z.array(z.string()).min(2, 'Must have at least 2 action items'),
 });
 
 const TranslatedBriefingResponseSchema = z.object({
