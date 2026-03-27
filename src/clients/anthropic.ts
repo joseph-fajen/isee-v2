@@ -88,7 +88,7 @@ const ExtractedIdeaSchema = z.object({
 });
 
 const BriefingResponseSchema = z.object({
-  ideas: z.array(ExtractedIdeaSchema),
+  ideas: z.array(ExtractedIdeaSchema).length(3, 'Must have exactly 3 ideas'),
 });
 
 // Translation Agent schemas
@@ -101,7 +101,7 @@ const SimplifiedIdeaSchema = z.object({
 
 const TranslatedBriefingResponseSchema = z.object({
   queryPlainLanguage: z.string(),
-  ideas: z.array(SimplifiedIdeaSchema),
+  ideas: z.array(SimplifiedIdeaSchema).length(3, 'Must have exactly 3 ideas'),
 });
 
 // Query Refinement schemas
