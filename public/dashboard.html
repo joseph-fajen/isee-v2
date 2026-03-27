@@ -369,6 +369,20 @@
     .latency-segment.translation { background: #8b5cf6; }
     .latency-segment.total       { background: var(--accent); opacity: 0.7; }
 
+    /* Time axis */
+    .time-axis {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      padding: 0.25rem 0;
+      margin-top: 2px;
+    }
+
+    .time-axis span {
+      opacity: 0.7;
+    }
+
     /* Stage legend */
     .stage-legend {
       display: flex;
@@ -595,6 +609,7 @@
         <div class="latency-chart" id="latency-chart">
           <div class="chart-empty">Loading…</div>
         </div>
+        <div class="time-axis" id="time-axis"></div>
         <div class="stage-legend" id="stage-legend" style="display:none">
           <div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div>Prep</div>
           <div class="legend-item"><div class="legend-dot" style="background:#06b6d4"></div>Synthesis</div>
@@ -882,9 +897,11 @@
       return apiFetch(`/api/dashboard/latency?period=${latencyPeriod}`).then(points => {
         const chart = document.getElementById('latency-chart');
         const legend = document.getElementById('stage-legend');
+        const timeAxis = document.getElementById('time-axis');
         if (!points.length) {
           chart.innerHTML = '<div class="chart-empty">No data for this period</div>';
           legend.style.display = 'none';
+          timeAxis.innerHTML = '';
           return;
         }
 
@@ -918,9 +935,24 @@
             }
           }).join('') +
           '</div>';
+
+        // Populate time axis labels
+        const formatTimeLabel = (ts, is7d) => {
+          const d = new Date(ts);
+          if (is7d) {
+            return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+          }
+          return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        };
+        const is7d = latencyPeriod === '7d';
+        const first = points[0]?.timestamp;
+        const last = points[points.length - 1]?.timestamp;
+        const unitLabel = is7d ? '(1 bar = 1 day)' : '(1 bar = 1 hour)';
+        timeAxis.innerHTML = `<span>${formatTimeLabel(first, is7d)}</span><span style="opacity:0.5">${unitLabel}</span><span>${formatTimeLabel(last, is7d)}</span>`;
       }).catch(() => {
         document.getElementById('latency-chart').innerHTML =
           '<div class="chart-empty">Failed to load</div>';
+        document.getElementById('time-axis').innerHTML = '';
       });
     }
 
@@ -975,7 +1007,7 @@
         if (data.byModel && data.byModel.length) {
           const maxCost = Math.max(...data.byModel.map(m => m.costUsd)) || 1;
           byModelHtml = '<div style="margin-top:0.75rem">' +
-            data.byModel.slice(0, 6).map(m => {
+            data.byModel.slice(0, 10).map(m => {
               const name = m.model.split('/').pop() || m.model;
               const pct = (m.costUsd / maxCost) * 100;
               return `<div style="margin-bottom:0.4rem;font-size:0.8rem">
