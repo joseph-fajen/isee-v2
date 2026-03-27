@@ -212,6 +212,23 @@
 
     .run-error { color: var(--error); font-size: 0.75rem; }
 
+    .run-cost {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+      text-align: right;
+      min-width: 55px;
+    }
+
+    .runs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.875rem;
+    }
+
+    .runs-header .section-title { margin-bottom: 0; }
+
     /* Model bars */
     .model-list { list-style: none; }
 
@@ -531,6 +548,13 @@
       </header>
 
       <!-- Summary cards -->
+      <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:0.5rem;gap:0.5rem">
+        <span style="font-size:0.75rem;color:var(--text-secondary)">Avg cost period:</span>
+        <div class="period-selector" id="summary-period-sel" style="margin-bottom:0">
+          <button class="period-btn" onclick="setSummaryPeriod('24h', this)">24h</button>
+          <button class="period-btn active" onclick="setSummaryPeriod('7d', this)">7d</button>
+        </div>
+      </div>
       <div class="summary-grid" id="summary-grid">
         <div class="card" id="card-runs">
           <div class="card-label">Total Runs</div>
@@ -549,6 +573,11 @@
         </div>
         <div class="card" id="card-cost">
           <div class="card-label">Total Cost</div>
+          <div class="card-value skeleton" style="height:2rem;width:60%;margin-bottom:0.5rem"></div>
+          <div class="card-sub skeleton" style="height:0.8rem;width:40%"></div>
+        </div>
+        <div class="card" id="card-avg-cost">
+          <div class="card-label">Avg Cost/Run</div>
           <div class="card-value skeleton" style="height:2rem;width:60%;margin-bottom:0.5rem"></div>
           <div class="card-sub skeleton" style="height:0.8rem;width:40%"></div>
         </div>
@@ -579,7 +608,10 @@
       <!-- Runs + Models -->
       <div class="two-col">
         <div class="card">
-          <div class="section-title">Recent Runs</div>
+          <div class="runs-header">
+            <div class="section-title">Recent Runs</div>
+            <div class="section-title" style="color:var(--text-secondary);font-weight:500">Cost</div>
+          </div>
           <ul class="runs-list" id="runs-list">
             <li class="run-item">
               <div class="skeleton" style="height:0.875rem;width:100%"></div>
@@ -633,6 +665,7 @@
     let autoRefreshTimer = null;
     let latencyPeriod = '24h';
     let costPeriod = '7d';
+    let summaryPeriod = '7d';
 
     // ---------------------------------------------------------------------------
     // Auth
@@ -743,8 +776,15 @@
     // Summary
     // ---------------------------------------------------------------------------
 
+    function setSummaryPeriod(period, btn) {
+      summaryPeriod = period;
+      document.querySelectorAll('#summary-period-sel .period-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadSummary();
+    }
+
     function loadSummary() {
-      return apiFetch('/api/dashboard/summary').then(data => {
+      return apiFetch(`/api/dashboard/summary?period=${summaryPeriod}`).then(data => {
         renderCard('card-runs',
           fmt(data.totalRuns),
           `+${data.runsToday} today`
@@ -765,13 +805,23 @@
           '$' + data.totalCostUsd.toFixed(2),
           '+$' + data.costToday.toFixed(2) + ' today'
         );
+        renderCard('card-avg-cost',
+          '$' + data.avgCostPerRunUsd.toFixed(2),
+          summaryPeriod === '24h' ? 'last 24 hours' : 'last 7 days'
+        );
       }).catch(() => {});
     }
 
     function renderCard(id, value, sub, subClass) {
       const card = document.getElementById(id);
       if (!card) return;
-      const labels = { 'card-runs': 'Total Runs', 'card-success': 'Success Rate', 'card-latency': 'Avg Latency', 'card-cost': 'Total Cost' };
+      const labels = {
+        'card-runs': 'Total Runs',
+        'card-success': 'Success Rate',
+        'card-latency': 'Avg Latency',
+        'card-cost': 'Total Cost',
+        'card-avg-cost': 'Avg Cost/Run'
+      };
       card.innerHTML =
         `<div class="card-label">${labels[id] || ''}</div>` +
         `<div class="card-value">${value}</div>` +
@@ -794,15 +844,20 @@
           const color = run.status === 'completed' ? 'var(--success)' : run.status === 'failed' ? 'var(--error)' : 'var(--text-secondary)';
           const time = run.startedAt ? new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
           const rawQuery = decodeHtml(run.refinedQuery || run.query);
-          const query = rawQuery.substring(0, 50) + (rawQuery.length > 50 ? '…' : '');
+          const query = rawQuery.substring(0, 45) + (rawQuery.length > 45 ? '…' : '');
           const err = run.errorMessage ? `<div class="run-error">${escHtml(run.errorMessage.substring(0, 60))}</div>` : '';
+          // Cost column: show cost for completed runs, dash for failed/running
+          const costDisplay = run.totalCostUsd && run.totalCostUsd > 0
+            ? '$' + run.totalCostUsd.toFixed(2)
+            : '—';
           return `<li class="run-item">
             <span class="run-status" style="color:${color}">${icon}</span>
             <div class="run-body">
               <div class="run-query">${escHtml(query)}</div>
-              <div class="run-time">${time}${run.durationMs ? ' · ' + fmtMs(run.durationMs) : ''}${run.totalCostUsd ? ' · $' + run.totalCostUsd.toFixed(3) : ''}</div>
+              <div class="run-time">${time}${run.durationMs ? ' · ' + fmtMs(run.durationMs) : ''}</div>
               ${err}
             </div>
+            <span class="run-cost">${costDisplay}</span>
           </li>`;
         }).join('');
       }).catch(() => {});

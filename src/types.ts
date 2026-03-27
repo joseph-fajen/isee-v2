@@ -445,6 +445,7 @@ export interface DashboardSummary {
   latencyChange: number;
   totalCostUsd: number;
   costToday: number;
+  avgCostPerRunUsd: number;
   lastUpdated: string;
 }
 
