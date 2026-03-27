@@ -450,6 +450,18 @@ export interface DashboardSummary {
 }
 
 /**
+ * Time-series data for sparkline charts on summary cards.
+ * Each array contains one value per time bucket (7 points for 7d, 24 for 24h).
+ */
+export interface SparklineData {
+  totalRuns: number[];
+  successRate: number[];
+  avgLatencyMs: number[];
+  totalCostUsd: number[];
+  avgCostPerRunUsd: number[];
+}
+
+/**
  * A single data point in a latency time series.
  */
 export interface LatencyPoint {

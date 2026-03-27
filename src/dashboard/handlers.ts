@@ -16,6 +16,7 @@ import {
   getCostBreakdownStats,
   getActiveRunCount,
   getAvgCostPerRun,
+  getSparklineData,
 } from '../db/metrics';
 import { getRuns } from '../db/runs';
 import { getCircuitBreaker } from '../resilience/circuit-breaker';
@@ -27,6 +28,7 @@ import type {
   CostBreakdown,
   HealthStatus,
   RunRecord,
+  SparklineData,
 } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -36,6 +38,7 @@ import type {
 const TTL_SUMMARY = 60;
 const TTL_RUNS = 30;
 const TTL_LATENCY = 60;
+const TTL_SPARKLINES = 60;
 const TTL_MODELS = 60;
 const TTL_COSTS = 300;
 const TTL_HEALTH = 10;
@@ -118,6 +121,24 @@ export async function getLatencyTimeSeriesHandler(period: '24h' | '7d'): Promise
   const result = getLatencyTimeSeries(bucketMinutes, lookbackHours);
 
   setCache(cacheKey, result, TTL_LATENCY);
+  return result;
+}
+
+/**
+ * GET /api/dashboard/sparklines
+ * Per-bucket arrays for summary card sparklines. period: '24h' | '7d'
+ */
+export async function getSparklines(period: '24h' | '7d' = '7d'): Promise<SparklineData> {
+  const cacheKey = `sparklines:${period}`;
+  const cached = getCached<SparklineData>(cacheKey);
+  if (cached) return cached;
+
+  const { bucketMinutes, lookbackHours } = period === '7d'
+    ? { bucketMinutes: 1440, lookbackHours: 7 * 24 }
+    : { bucketMinutes: 60, lookbackHours: 24 };
+
+  const result = getSparklineData(bucketMinutes, lookbackHours);
+  setCache(cacheKey, result, TTL_SPARKLINES);
   return result;
 }
 

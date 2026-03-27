@@ -6,7 +6,7 @@
  */
 
 import { getDatabase } from './connection';
-import type { LatencyPoint, ModelStats } from '../types';
+import type { LatencyPoint, ModelStats, SparklineData } from '../types';
 
 // ---------------------------------------------------------------------------
 // Live metric queries (for Prometheus /api/metrics endpoint)
@@ -473,4 +473,47 @@ export function currentHour(): string {
   const now = new Date();
   now.setMinutes(0, 0, 0);
   return now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * Get per-bucket arrays for all five summary card sparklines.
+ * @param bucketMinutes - Size of each time bucket in minutes (e.g. 60 = hourly)
+ * @param lookbackHours - How far back to look (e.g. 24 = last 24 hours)
+ */
+export function getSparklineData(bucketMinutes: number, lookbackHours: number): SparklineData {
+  const db = getDatabase();
+  const since = new Date(Date.now() - lookbackHours * 3_600_000).toISOString();
+  const bucketSeconds = bucketMinutes * 60;
+
+  const rows = db.query<{
+    bucket: string;
+    callCount: number;
+    successCount: number;
+    avgLatencyMs: number | null;
+    totalCostUsd: number | null;
+    avgCostPerRunUsd: number | null;
+  }, [string]>(
+    `SELECT
+       datetime(
+         (strftime('%s', COALESCE(started_at, datetime(created_at / 1000, 'unixepoch'))) / ${bucketSeconds}) * ${bucketSeconds},
+         'unixepoch'
+       ) AS bucket,
+       COUNT(*) AS callCount,
+       SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS successCount,
+       AVG(CASE WHEN status = 'completed' THEN duration_ms ELSE NULL END) AS avgLatencyMs,
+       SUM(COALESCE(total_cost_usd, 0)) AS totalCostUsd,
+       AVG(CASE WHEN status = 'completed' AND total_cost_usd > 0 THEN total_cost_usd ELSE NULL END) AS avgCostPerRunUsd
+     FROM runs
+     WHERE COALESCE(started_at, datetime(created_at / 1000, 'unixepoch')) >= ?
+     GROUP BY bucket
+     ORDER BY bucket ASC`
+  ).all(since);
+
+  return {
+    totalRuns: rows.map(r => r.callCount),
+    successRate: rows.map(r => r.callCount > 0 ? (r.successCount / r.callCount) * 100 : 0),
+    avgLatencyMs: rows.map(r => r.avgLatencyMs ?? 0),
+    totalCostUsd: rows.map(r => r.totalCostUsd ?? 0),
+    avgCostPerRunUsd: rows.map(r => r.avgCostPerRunUsd ?? 0),
+  };
 }
