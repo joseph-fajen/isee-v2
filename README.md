@@ -6,6 +6,23 @@ ISEE is a thinking amplifier that expands the possibility space through combinat
 
 > See [OVERVIEW.md](./OVERVIEW.md) for a detailed explanation of how ISEE works.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/ISEE-query-starting.png" alt="ISEE Query Input" width="600">
+  <br><em>Enter your question — ISEE will explore it from dozens of perspectives</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/ISEE-query-in-process.png" alt="ISEE Analysis in Progress" width="600">
+  <br><em>Watch the pipeline work: 66 LLM calls → clustering → tournament debate → synthesis</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/ISEE-dashboard.png" alt="ISEE Operations Dashboard" width="600">
+  <br><em>Operations dashboard with real-time metrics, cost tracking, and model performance</em>
+</p>
+
 ## Quick Start
 
 ```bash
