@@ -1,19 +1,27 @@
 # Archon Workflow Guide
 
-**Last Updated**: 2026-03-25
+**Last Updated**: 2026-03-27
 
-This document explains how to work with Archon CLI and Web UI together.
+This document explains how to work with Archon CLI and Web UI together, specifically for the ISEE v2 project.
 
 ---
 
 ## Architecture Overview
 
-Archon has three main components:
+When developing ISEE v2, you run three services simultaneously:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
+│                  ISEE v2 Server                         │
+│              (Bun server on port 3000)                  │
+│         Main app: http://localhost:3000                 │
+│         Dashboard: http://localhost:3000/dashboard      │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
 │                    Archon Web UI                        │
-│              (React app on port 5173)                   │
+│              (Vite dev server on port 5173)             │
+│         http://localhost:5173                           │
 └──────────────────────────┬──────────────────────────────┘
                            │ HTTP/SSE
                            ▼
@@ -29,6 +37,13 @@ Archon has three main components:
          │  CLI   │  │ Telegram │  │ GitHub │  ... adapters
          └────────┘  └──────────┘  └────────┘
 ```
+
+**Port Summary:**
+| Service | Port | URL |
+|---------|------|-----|
+| ISEE v2 | 3000 | http://localhost:3000 |
+| Archon API | 3090 | http://localhost:3090 |
+| Archon Web UI | 5173 | http://localhost:5173 |
 
 **Key insight**: The CLI and Web UI are independent adapters that both talk to the same Archon server and database.
 
@@ -60,25 +75,41 @@ To see workflows in the Web UI:
 
 ---
 
-## Starting the Web UI
+## Starting All Services
 
-From the Archon repo (`~/git/remote-coding-agent`):
+### Quick Start (3 Terminals)
+
+**Terminal 1** — ISEE v2 server:
+```bash
+cd ~/git/isee-v2
+bun run dev
+# → http://localhost:3000
+```
+
+**Terminal 2** — Archon server (must use PORT=3090 to avoid conflict):
+```bash
+cd ~/git/remote-coding-agent
+PORT=3090 bun run dev:server
+# → http://localhost:3090
+```
+
+**Terminal 3** — Archon Web UI:
+```bash
+cd ~/git/remote-coding-agent
+bun run dev:web
+# → http://localhost:5173
+```
+
+### Alternative: Start Archon Server + Web Together
 
 ```bash
-# Option 1: Start everything (server + web)
-bun run dev
+cd ~/git/remote-coding-agent
+PORT=3090 bun run dev
 # → API server: http://localhost:3090
 # → Web UI: http://localhost:5173
-
-# Option 2: Start server only (for CLI monitoring)
-bun run dev:server
-# → API server: http://localhost:3090
-
-# Option 3: Production mode
-bun run build
-bun run start
-# → Both served on http://localhost:3090
 ```
+
+**Important**: Always set `PORT=3090` when running Archon, otherwise it defaults to port 3000 which conflicts with ISEE.
 
 ---
 
@@ -88,10 +119,10 @@ bun run start
 
 **Symptom**: Web UI shows "Disconnected" or workflows don't appear.
 
-**Fix**: Start the server:
+**Fix**: Start the server with the correct port:
 ```bash
 cd ~/git/remote-coding-agent
-bun run dev:server
+PORT=3090 bun run dev:server
 ```
 
 ### Problem 2: Server Running But No Workflows Visible
@@ -112,25 +143,53 @@ bun run dev:server
 
 **Reality**: The data IS in the database. The Web UI should show it after refresh or project selection. If not, check project registration.
 
+### Problem 4: Port Conflict with ISEE
+
+**Symptom**: ISEE stops responding, or Archon server fails to start.
+
+**Cause**: Both ISEE and Archon default to port 3000.
+
+**Fix**: Always start Archon with `PORT=3090`:
+```bash
+PORT=3090 bun run dev        # or
+PORT=3090 bun run dev:server
+```
+
+**Verify ports are correct**:
+```bash
+lsof -i :3000  # Should show ISEE (bun)
+lsof -i :3090  # Should show Archon (bun)
+lsof -i :5173  # Should show Archon Web UI (node/vite)
+```
+
 ---
 
 ## Recommended Workflow
 
 ### For Development with Full Visibility
 
-1. **Terminal 1** — Start Archon server + Web UI:
+1. **Terminal 1** — Start ISEE server:
    ```bash
-   cd ~/git/remote-coding-agent
+   cd ~/git/isee-v2
    bun run dev
    ```
 
-2. **Terminal 2** — Run workflows from your project:
+2. **Terminal 2** — Start Archon server + Web UI:
+   ```bash
+   cd ~/git/remote-coding-agent
+   PORT=3090 bun run dev
+   ```
+
+3. **Terminal 3** — Run workflows or Claude Code:
    ```bash
    cd ~/git/isee-v2
    archon workflow run isee-implement-component --branch fix/my-feature "Fix the thing"
    ```
 
-3. **Browser** — Open http://localhost:5173 to monitor progress
+4. **Browser tabs**:
+   - http://localhost:3000 — ISEE app
+   - http://localhost:3000/dashboard — ISEE operations dashboard
+   - http://localhost:5173 — Archon workflow monitoring
 
 ### For Quick CLI-Only Work
 
@@ -168,10 +227,12 @@ archon workflow status
 
 | Issue | Check | Fix |
 |-------|-------|-----|
-| Web UI won't connect | Is server running on :3090? | `bun run dev:server` from Archon repo |
-| Workflows not visible | Is project registered in Web UI? | Click + → Add project path |
+| Web UI won't connect | Is server running on :3090? | `PORT=3090 bun run dev:server` from Archon repo |
+| Workflows not visible | Is project registered in Web UI? | Click project dropdown → select `joseph-fajen/isee-v2` |
 | Old data showing | Server restarted recently? | Refresh browser, clear cache |
 | CLI works but Web UI doesn't | Different Archon versions? | `git pull` and `bun install` in Archon repo |
+| Port conflict with ISEE | Did you set PORT=3090? | Archon defaults to port 3000, same as ISEE |
+| ISEE not responding | Is Archon using port 3000? | Kill Archon, restart with `PORT=3090` |
 
 ---
 
