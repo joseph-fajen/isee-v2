@@ -29,27 +29,45 @@ ISEE is a thinking amplifier that expands the possibility space through combinat
 # Install dependencies
 bun install
 
-# Copy environment template
+# Copy environment template and add your API keys
 cp .env.template .env
-# Edit .env with your API keys
+```
 
+You'll need two API keys:
+- **Anthropic** — for pipeline agents (clustering, tournament, synthesis)
+- **OpenRouter** — for multi-model synthesis (GPT-4o, Gemini, Llama, etc.)
+
+```bash
 # Run the development server
 bun run dev
 
-# Or run the pipeline directly
-bun run pipeline "Your research question here"
+# Open http://localhost:3000 for the web UI
+# Open http://localhost:3000/dashboard for operations metrics
 ```
 
 ## Status
 
-ISEE v2 is fully functional. Features include:
+ISEE v2 is fully functional and production-ready.
 
+### Core Pipeline
 - Smart query refinement with follow-up questions
-- Multi-model synthesis (6 models × 11 frameworks × dynamic domains)
+- Multi-model synthesis (8 models × 11 cognitive frameworks × dynamic domains)
 - Emergent clustering by intellectual angle
-- Advocate/Skeptic/Rebuttal tournament
-- Plain-language briefings with action items
-- Full analysis with debate transcripts
+- Advocate/Skeptic/Rebuttal tournament debate
+- Plain-language briefings with concrete action items
+
+### Operations Dashboard
+- Real-time metrics with sparkline trends
+- Pipeline latency breakdown by stage
+- Cost tracking per run and per model (~$1/run average)
+- Model performance monitoring (success rates, P95 latency)
+- System health checks with circuit breaker status
+
+### Infrastructure
+- Dual-provider architecture (OpenRouter + Anthropic)
+- Circuit breaker resilience for API failures
+- SQLite persistence for runs and metrics
+- OpenTelemetry tracing
 
 ## Documentation
 
