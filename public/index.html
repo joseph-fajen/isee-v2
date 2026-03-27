@@ -302,6 +302,38 @@
       display: none;
     }
 
+    .activity-log-container {
+      position: relative;
+    }
+
+    .jump-to-latest {
+      position: absolute;
+      bottom: 0.5rem;
+      right: 0.5rem;
+      background: var(--accent);
+      color: var(--bg-primary);
+      border: none;
+      border-radius: 20px;
+      padding: 0.35rem 0.85rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: auto;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+      z-index: 10;
+    }
+
+    .jump-to-latest.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .jump-to-latest:hover:not(:disabled) {
+      background: var(--accent-dim);
+    }
+
     .log-entry {
       color: var(--text-secondary);
       margin-bottom: 0.25rem;
@@ -616,7 +648,10 @@
           Hide activity log
         </button>
       </div>
-      <div class="activity-log" id="activity-log"></div>
+      <div class="activity-log-container">
+        <div class="activity-log" id="activity-log"></div>
+        <button class="jump-to-latest" id="jump-to-latest" onclick="jumpToLatest()">↓ Jump to latest</button>
+      </div>
     </div>
 
     <!-- Output Section -->
@@ -641,6 +676,41 @@
     const stages = ['prep', 'synthesis', 'clustering', 'tournament', 'synthesizer', 'translation'];
     let eventSource = null;
     let activityLogVisible = true;
+    let autoScrollPaused = false;
+
+    // Detect user scroll — pause auto-scroll when scrolled up, resume at bottom
+    document.addEventListener('DOMContentLoaded', function() {
+      const log = document.getElementById('activity-log');
+      if (!log) return;
+      log.addEventListener('scroll', function() {
+        const threshold = 50;
+        const isNearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < threshold;
+        if (isNearBottom) {
+          autoScrollPaused = false;
+          hideJumpToLatest();
+        } else {
+          autoScrollPaused = true;
+        }
+      });
+    });
+
+    function showJumpToLatest() {
+      const btn = document.getElementById('jump-to-latest');
+      if (btn) btn.classList.add('visible');
+    }
+
+    function hideJumpToLatest() {
+      const btn = document.getElementById('jump-to-latest');
+      if (btn) btn.classList.remove('visible');
+    }
+
+    /** Scroll the activity log to the bottom and resume auto-scroll. */
+    function jumpToLatest() {
+      const log = document.getElementById('activity-log');
+      if (log) log.scrollTop = log.scrollHeight;
+      autoScrollPaused = false;
+      hideJumpToLatest();
+    }
 
     function setStageStatus(stageId, status) {
       const el = document.getElementById(`stage-${stageId}`);
@@ -684,10 +754,10 @@
 
       log.appendChild(entry);
 
-      // Auto-scroll if user is near bottom
-      const threshold = 50;
-      const isNearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < threshold;
-      if (isNearBottom) {
+      // Auto-scroll to bottom, or show jump button if user has scrolled up
+      if (autoScrollPaused) {
+        showJumpToLatest();
+      } else {
         log.scrollTop = log.scrollHeight;
       }
     }
@@ -878,6 +948,8 @@
       outputSection.classList.remove('active');
 
       stages.forEach(s => setStageStatus(s, 'pending'));
+      autoScrollPaused = false;
+      hideJumpToLatest();
       clearActivityLog();
 
       if (eventSource) eventSource.close();
