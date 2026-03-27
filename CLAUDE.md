@@ -12,13 +12,13 @@ ISEE (Idea Synthesis and Extraction Engine) is a thinking amplifier that:
 
 ## Core Design Principles
 
-See [PRD.md](./PRD.md#design-principles) for the 5 core design principles. Key principles to keep in mind while coding:
+See [PRD.md](./docs/PRD.md#design-principles) for the 5 core design principles. Key principles to keep in mind while coding:
 - **ISEE does the work** — no user-facing evaluation UI
 - **Emergent over structural** — clustering discovers angles, doesn't impose categories
 
 ## Architecture Overview
 
-> Full design details in [ARCHITECTURE.md](./ARCHITECTURE.md)
+> Full design details in [ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 
 ```
 [Query Input]
@@ -38,7 +38,7 @@ See [PRD.md](./PRD.md#design-principles) for the 5 core design principles. Key p
 
 ## Tech Stack
 
-> Full stack details in [ARCHITECTURE.md](./ARCHITECTURE.md)
+> Full stack details in [ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 
 Key details for implementation:
 - **OpenRouter**: Used for Synthesis Layer (6 heterogeneous models)
@@ -116,14 +116,13 @@ Individual LLM failures should not crash the pipeline:
 
 ## Build Phases
 
-Reference [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed build phases.
+Reference [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed build phases.
 
 ## Reference Documents
 
-- [PRD.md](./PRD.md) - Product requirements, design principles, success criteria
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Stage-by-stage design, data contracts, project structure
-- [PROMPTS.md](./PROMPTS.md) - All pipeline prompts with design rationale
+- [PRD.md](./docs/PRD.md) - Product requirements, design principles, success criteria
+- [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - Stage-by-stage design, data contracts, project structure
 
 ## What NOT to Build
 
-See [PRD.md](./PRD.md#out-of-scope-for-v2) for the complete scope exclusion list. In short: no scoring UIs, no file browsers, no annotation systems, no configuration UI.
+See [PRD.md](./docs/PRD.md#out-of-scope-for-v2) for the complete scope exclusion list. In short: no scoring UIs, no file browsers, no annotation systems, no configuration UI.

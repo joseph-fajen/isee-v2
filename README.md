@@ -4,7 +4,7 @@
 
 ISEE is a thinking amplifier that expands the possibility space through combinatorial synthesis, then extracts 3 breakthrough ideas through rigorous emergent evaluation.
 
-> See [OVERVIEW.md](./OVERVIEW.md) for a detailed explanation of how ISEE works.
+> See [OVERVIEW.md](./docs/OVERVIEW.md) for a detailed explanation of how ISEE works.
 
 ## Screenshots
 
@@ -73,10 +73,9 @@ ISEE v2 is fully functional and production-ready.
 
 | Document | Purpose |
 |----------|---------|
-| [OVERVIEW.md](./OVERVIEW.md) | What ISEE is, how it works, what you get |
-| [PRD.md](./PRD.md) | Product requirements, design principles, scope |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | Technical design, data contracts, project structure |
-| [PROMPTS.md](./PROMPTS.md) | All pipeline prompts with design rationale |
+| [OVERVIEW.md](./docs/OVERVIEW.md) | What ISEE is, how it works, what you get |
+| [PRD.md](./docs/PRD.md) | Product requirements, design principles, scope |
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Technical design, data contracts, project structure |
 | [CLAUDE.md](./CLAUDE.md) | Developer conventions for AI coding assistants |
 
 ## License
