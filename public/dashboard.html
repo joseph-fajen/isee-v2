@@ -174,6 +174,18 @@
     .card-sub.up { color: var(--success); }
     .card-sub.down { color: var(--error); }
 
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .card-sparkline {
+      opacity: 0.7;
+      flex-shrink: 0;
+      margin-top: 0.25rem;
+    }
+
     /* Two-column row */
     .two-col {
       display: grid;
@@ -799,35 +811,77 @@
     }
 
     function loadSummary() {
-      return apiFetch(`/api/dashboard/summary?period=${summaryPeriod}`).then(data => {
+      return Promise.all([
+        apiFetch(`/api/dashboard/summary?period=${summaryPeriod}`),
+        apiFetch(`/api/dashboard/sparklines?period=${summaryPeriod}`).catch(err => { console.warn('[dashboard] sparklines fetch failed:', err); return null; })
+      ]).then(([data, sparklines]) => {
+        const s = sparklines || {};
+
+        const latencyUp = data.latencyChange > 0;
+        const successUp = data.successRateChange > 0;
+        const latencyColor = latencyUp ? 'var(--error)' : 'var(--success)';
+        const successColor = successUp ? 'var(--success)' : 'var(--error)';
+
         renderCard('card-runs',
           fmt(data.totalRuns),
-          `+${data.runsToday} today`
+          `+${data.runsToday} today`,
+          '',
+          s.totalRuns,
+          'var(--accent)'
         );
         const srChange = data.successRateChange;
         renderCard('card-success',
           data.successRate.toFixed(1) + '%',
           (srChange >= 0 ? '▲' : '▼') + ' ' + Math.abs(srChange).toFixed(1) + '%',
-          srChange >= 0 ? 'up' : 'down'
+          srChange >= 0 ? 'up' : 'down',
+          s.successRate,
+          successColor
         );
         const latChange = data.latencyChange;
         renderCard('card-latency',
           fmtMs(data.avgLatencyMs),
           (latChange <= 0 ? '▼' : '▲') + ' ' + fmtMs(Math.abs(latChange)),
-          latChange <= 0 ? 'up' : 'down'
+          latChange <= 0 ? 'up' : 'down',
+          s.avgLatencyMs,
+          latencyColor
         );
         renderCard('card-cost',
           '$' + data.totalCostUsd.toFixed(2),
-          '+$' + data.costToday.toFixed(2) + ' today'
+          '+$' + data.costToday.toFixed(2) + ' today',
+          '',
+          s.totalCostUsd,
+          'var(--accent)'
         );
         renderCard('card-avg-cost',
           '$' + data.avgCostPerRunUsd.toFixed(2),
-          summaryPeriod === '24h' ? 'last 24 hours' : 'last 7 days'
+          summaryPeriod === '24h' ? 'last 24 hours' : 'last 7 days',
+          '',
+          s.avgCostPerRunUsd,
+          'var(--accent)'
         );
-      }).catch(() => {});
+      }).catch(err => { console.error('[dashboard] loadSummary failed:', err); });
     }
 
-    function renderCard(id, value, sub, subClass) {
+    function renderSparkline(data, color) {
+      // Requires data.length >= 2 to compute a valid polyline
+      if (!data || data.length < 2) return '';
+      const w = 60;
+      const h = 20;
+      const max = Math.max(...data);
+      const min = Math.min(...data);
+      const range = max - min || 1; // || 1 prevents division-by-zero on flat data
+      const pts = data.map((v, i) => {
+        const x = (i / (data.length - 1)) * w;
+        const y = h - ((v - min) / range) * (h - 2) - 1;
+        return x.toFixed(1) + ',' + y.toFixed(1);
+      }).join(' ');
+      return `<svg width="${w}" height="${h}" style="display:block">` +
+        `<polyline fill="none" stroke="${color}" stroke-width="1.5" ` +
+        `stroke-linecap="round" stroke-linejoin="round" points="${pts}"/>` +
+        `</svg>`;
+    }
+
+    function renderCard(id, value, sub, subClass, sparklineData, sparklineColor) {
       const card = document.getElementById(id);
       if (!card) return;
       const labels = {
@@ -837,9 +891,17 @@
         'card-cost': 'Total Cost',
         'card-avg-cost': 'Avg Cost/Run'
       };
+      const sparklineSvg = sparklineData && sparklineData.length > 1
+        ? renderSparkline(sparklineData, sparklineColor || 'var(--accent)')
+        : '';
       card.innerHTML =
-        `<div class="card-label">${labels[id] || ''}</div>` +
-        `<div class="card-value">${value}</div>` +
+        `<div class="card-header">` +
+          `<div>` +
+            `<div class="card-label">${labels[id] || ''}</div>` +
+            `<div class="card-value">${value}</div>` +
+          `</div>` +
+          (sparklineSvg ? `<div class="card-sparkline">${sparklineSvg}</div>` : '') +
+        `</div>` +
         `<div class="card-sub${subClass ? ' ' + subClass : ''}">${sub}</div>`;
     }
 
