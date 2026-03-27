@@ -813,7 +813,7 @@
     function loadSummary() {
       return Promise.all([
         apiFetch(`/api/dashboard/summary?period=${summaryPeriod}`),
-        apiFetch(`/api/dashboard/sparklines?period=${summaryPeriod}`).catch(() => null)
+        apiFetch(`/api/dashboard/sparklines?period=${summaryPeriod}`).catch(err => { console.warn('[dashboard] sparklines fetch failed:', err); return null; })
       ]).then(([data, sparklines]) => {
         const s = sparklines || {};
 
@@ -859,15 +859,17 @@
           s.avgCostPerRunUsd,
           'var(--accent)'
         );
-      }).catch(() => {});
+      }).catch(err => { console.error('[dashboard] loadSummary failed:', err); });
     }
 
     function renderSparkline(data, color) {
+      // Requires data.length >= 2 to compute a valid polyline
+      if (!data || data.length < 2) return '';
       const w = 60;
       const h = 20;
       const max = Math.max(...data);
       const min = Math.min(...data);
-      const range = max - min || 1;
+      const range = max - min || 1; // || 1 prevents division-by-zero on flat data
       const pts = data.map((v, i) => {
         const x = (i / (data.length - 1)) * w;
         const y = h - ((v - min) / range) * (h - 2) - 1;

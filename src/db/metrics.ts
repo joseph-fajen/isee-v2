@@ -479,6 +479,7 @@ export function currentHour(): string {
  * Get per-bucket arrays for all five summary card sparklines.
  * @param bucketMinutes - Size of each time bucket in minutes (e.g. 60 = hourly)
  * @param lookbackHours - How far back to look (e.g. 24 = last 24 hours)
+ * @returns Parallel arrays per metric, one per non-empty bucket, oldest first.
  */
 export function getSparklineData(bucketMinutes: number, lookbackHours: number): SparklineData {
   const db = getDatabase();

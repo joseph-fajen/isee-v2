@@ -17,6 +17,7 @@ import {
   getModelStats,
   getCostBreakdown,
   getHealthStatus,
+  getSparklines,
 } from './handlers';
 
 function setup() {
@@ -291,5 +292,35 @@ describe('getHealthStatus', () => {
 
     const health = await getHealthStatus();
     expect(health.activeRuns).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSparklines
+// ---------------------------------------------------------------------------
+
+describe('getSparklines', () => {
+  beforeEach(setup);
+  afterEach(teardown);
+
+  test('returns SparklineData shape on empty DB', async () => {
+    const data = await getSparklines('24h');
+    expect(Array.isArray(data.totalRuns)).toBe(true);
+    expect(Array.isArray(data.successRate)).toBe(true);
+    expect(Array.isArray(data.avgLatencyMs)).toBe(true);
+    expect(Array.isArray(data.totalCostUsd)).toBe(true);
+    expect(Array.isArray(data.avgCostPerRunUsd)).toBe(true);
+  });
+
+  test('caches result — second call returns same reference', async () => {
+    const d1 = await getSparklines('24h');
+    const d2 = await getSparklines('24h');
+    expect(d1).toBe(d2);
+  });
+
+  test('24h and 7d use separate cache keys', async () => {
+    const d24h = await getSparklines('24h');
+    const d7d  = await getSparklines('7d');
+    expect(d24h).not.toBe(d7d);
   });
 });

@@ -451,7 +451,11 @@ export interface DashboardSummary {
 
 /**
  * Time-series data for sparkline charts on summary cards.
- * Each array contains one value per time bucket (7 points for 7d, 24 for 24h).
+ * Each array contains one value per non-empty time bucket.
+ * Length is between 0 and the number of buckets in the period
+ * (up to 24 for '24h', up to 7 for '7d').
+ * Sparse periods with no runs produce shorter arrays — always
+ * guard on length before accessing specific indices.
  */
 export interface SparklineData {
   totalRuns: number[];
