@@ -41,7 +41,7 @@ IDEAS FROM ANALYSIS:
 ${ideasText}
 
 YOUR TASK:
-Translate each idea into plain language that a smart friend would use over coffee. For each idea, provide:
+Translate each of the 3 ideas above into plain language that a smart friend would use over coffee. You MUST return exactly 3 translated ideas — one for each input idea, in the same order. For each idea, provide:
 
 1. title — A plain-language title (no jargon, no academic phrasing). 5-10 words.
 2. explanation — 2-3 sentences explaining the idea as if to someone smart but not in this field. No jargon. Focus on what it means for the user, not how it was derived.
@@ -58,6 +58,8 @@ TRANSLATION PRINCIPLES:
 - Do NOT add new ideas or analysis. You are translating, not creating.
 
 Also provide a plain-language version of the user's question (queryPlainLanguage) — restate it conversationally in 1-2 sentences, as if the user were explaining their problem to a friend.
+
+IMPORTANT: Return exactly 3 translated ideas. Do not add, split, or combine ideas.
 
 Respond with the translated briefing.`;
 }

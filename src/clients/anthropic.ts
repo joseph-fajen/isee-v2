@@ -101,7 +101,7 @@ const SimplifiedIdeaSchema = z.object({
 
 const TranslatedBriefingResponseSchema = z.object({
   queryPlainLanguage: z.string(),
-  ideas: z.array(SimplifiedIdeaSchema).length(3, 'Must have exactly 3 ideas'),
+  ideas: z.array(SimplifiedIdeaSchema).min(3, 'Must have at least 3 ideas'),
 });
 
 // Query Refinement schemas
@@ -849,12 +849,13 @@ export async function translateBriefingWithClaude(
 
       const result = response.parsed_output;
 
-      // Validate we got 3 translated ideas
-      if (result.ideas.length !== 3) {
+      // Truncate to exactly 3 ideas if model returned more
+      if (result.ideas.length > 3) {
         logger.warn(
-          { ideaCount: result.ideas.length, expected: 3 },
-          'Unexpected idea count from Translation Agent'
+          { ideaCount: result.ideas.length, truncatingTo: 3 },
+          'Translation Agent returned extra ideas, truncating to 3'
         );
+        result.ideas = result.ideas.slice(0, 3);
       }
 
       const inputTokens = response.usage?.input_tokens;
