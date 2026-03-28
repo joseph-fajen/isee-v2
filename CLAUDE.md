@@ -132,6 +132,7 @@ Reference [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed build phases.
 
 - [PRD.md](./docs/PRD.md) - Product requirements, design principles, success criteria
 - [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - Stage-by-stage design, data contracts, project structure
+- [evaluation-log.md](./docs/evaluation-log.md) - Output quality evaluation methodology and session log
 
 ## What NOT to Build
 
