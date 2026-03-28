@@ -10,8 +10,7 @@
  * Stage 5: Translation Agent (plain-language briefing)
  */
 
-import type { PipelineConfig, ProgressEvent, Briefing, TranslatedBriefing, RunStats } from './types';
-import type { QueryContext } from './clients/anthropic';
+import type { PipelineConfig, ProgressEvent, Briefing, TranslatedBriefing, RunStats, QueryContext } from './types';
 import { generateDomains } from './pipeline/prep';
 import { generateSynthesisMatrix } from './pipeline/synthesis';
 import { clusterResponses } from './pipeline/clustering';
@@ -28,6 +27,26 @@ export interface PipelineResult {
   briefing: Briefing;
   translatedBriefing: TranslatedBriefing;
   markdown: string;
+}
+
+/**
+ * Build the QueryContext from a pipeline config's query and optional refinement.
+ *
+ * Invariant: when wasRefined=true, config.refinement.originalQuery is always present,
+ * so the `?? query` fallback only fires in the no-refinement case where query IS the original.
+ *
+ * @param query - The pipeline query string (may be refined)
+ * @param refinement - Optional refinement metadata
+ * @returns QueryContext with originalQuery authoritative and refinedQuery additive-only
+ */
+export function buildQueryContext(
+  query: string,
+  refinement?: { originalQuery?: string; wasRefined?: boolean }
+): QueryContext {
+  return {
+    originalQuery: refinement?.originalQuery ?? query,
+    refinedQuery: refinement?.wasRefined ? query : undefined,
+  };
 }
 
 /**
@@ -99,12 +118,13 @@ export async function runPipeline(
       rootSpan.setAttribute('pipeline.run_id', runId);
       rootSpan.setAttribute('pipeline.query_length', query.length);
 
-      // Construct query context for dual-query handling
-      // Original query is authoritative; refined query provides additive context only
-      const queryContext: QueryContext = {
-        originalQuery: config.refinement?.originalQuery ?? query,
-        refinedQuery: config.refinement?.wasRefined ? query : undefined,
-      };
+      // Construct query context for dual-query handling.
+      const queryContext = buildQueryContext(query, config.refinement);
+
+      // Guard: fail fast before any LLM budget is spent on an empty query
+      if (!queryContext.originalQuery?.trim()) {
+        throw new Error('originalQuery is required and must not be empty');
+      }
 
       // =========================================================================
       // Stage 0: Prep Agent - Domain Generation

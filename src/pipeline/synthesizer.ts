@@ -14,7 +14,8 @@
  */
 
 import type { Domain, DebateEntry, ExtractedIdea, Briefing, RunStats, TranslatedBriefing } from '../types';
-import { generateBriefingWithClaude, type QueryContext } from '../clients/anthropic';
+import { generateBriefingWithClaude } from '../clients/anthropic';
+import type { QueryContext } from '../types';
 import { logger as baseLogger, type Logger } from '../utils/logger';
 
 interface SynthesizerConfig {

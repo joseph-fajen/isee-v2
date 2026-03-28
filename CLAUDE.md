@@ -88,6 +88,16 @@ Each pipeline stage has strict input/output contracts defined in `src/types.ts`.
 2. Ensure output matches the expected shape
 3. The orchestrator in `pipeline.ts` validates data flow
 
+### Dual-Query Handling
+
+All pipeline agents accept a `QueryContext` (defined in `src/types.ts`) instead of a plain `string`. The interface has two fields:
+- `originalQuery` — the user's verbatim query; always present; **authoritative**
+- `refinedQuery` — additive context from follow-up Q&A; only set when `wasRefined=true`; never overrides original intent
+
+When adding a new agent or stage, accept `QueryContext` not `string`. The original query is always the ground truth. The refined query provides context only — it must never replace or reinterpret the original framing.
+
+`Briefing.query` always stores `originalQuery`, not the pipeline's internal `query` variable. This ensures the user always sees their actual question in the output.
+
 ### Metadata Handling
 
 **Critical**: The Clustering Agent must NOT receive source metadata (model, framework, domain). It receives response content only. Metadata is preserved separately and reunited in the final briefing for the "show full debate" section.

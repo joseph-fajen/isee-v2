@@ -6,7 +6,7 @@
 import { clusterResponses } from './pipeline/clustering';
 import { runTournament } from './pipeline/tournament';
 import { createRunLogger } from './utils/logger';
-import type { RawResponse } from './types';
+import type { RawResponse, QueryContext } from './types';
 
 // Mock responses for testing (simulating synthesis output)
 const mockResponses: RawResponse[] = Array.from({ length: 20 }, (_, i) => ({
@@ -40,9 +40,11 @@ async function testPhase3() {
   console.log(`Mock responses: ${mockResponses.length}`);
   console.log('');
 
+  const queryContext: QueryContext = { originalQuery: query };
+
   // Test Clustering
   console.log('Testing Clustering Agent...');
-  const clusters = await clusterResponses(mockResponses, query, runLogger);
+  const clusters = await clusterResponses(mockResponses, queryContext, runLogger);
   console.log(`Generated ${clusters.length} clusters:`);
   clusters.forEach((c) => {
     console.log(`  [${c.id}] ${c.name}`);
@@ -53,7 +55,7 @@ async function testPhase3() {
   // Test Tournament
   console.log('Testing Tournament Layer...');
   const { debateEntries } = await runTournament({
-    query,
+    queryContext,
     clusters,
     responses: mockResponses,
     runLogger,

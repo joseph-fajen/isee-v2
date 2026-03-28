@@ -10,7 +10,8 @@
  */
 
 import type { RawResponse, AnonymizedResponse, Cluster } from '../types';
-import { clusterResponsesWithClaude, type QueryContext } from '../clients/anthropic';
+import { clusterResponsesWithClaude } from '../clients/anthropic';
+import type { QueryContext } from '../types';
 import { logger as baseLogger, type Logger } from '../utils/logger';
 
 /**

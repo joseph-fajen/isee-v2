@@ -9,18 +9,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { Logger } from '../utils/logger';
-import type { Domain, Cluster, SkepticChallenge, ExtractedIdea, DebateEntry, SimplifiedIdea } from '../types';
-
-/**
- * Query context for dual-query handling.
- * Original query is authoritative; refined query provides additive context only.
- */
-export interface QueryContext {
-  /** The user's original query, verbatim */
-  originalQuery: string;
-  /** The refined query with additional context (only if refinement occurred) */
-  refinedQuery?: string;
-}
+import type { Domain, Cluster, SkepticChallenge, ExtractedIdea, DebateEntry, SimplifiedIdea, QueryContext } from '../types';
 import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/logger';
 import { getTracer } from '../observability/tracing';
 import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';

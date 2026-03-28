@@ -9,7 +9,8 @@
  */
 
 import type { Domain } from '../types';
-import { generateDomainsWithClaude, type QueryContext } from '../clients/anthropic';
+import { generateDomainsWithClaude } from '../clients/anthropic';
+import type { QueryContext } from '../types';
 import { logger as baseLogger, type Logger } from '../utils/logger';
 
 /**

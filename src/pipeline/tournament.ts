@@ -22,8 +22,8 @@ import {
   generateAdvocateArgument,
   generateSkepticChallenges,
   generateRebuttal,
-  type QueryContext,
 } from '../clients/anthropic';
+import type { QueryContext } from '../types';
 import { logger as baseLogger, type Logger } from '../utils/logger';
 
 interface TournamentConfig {
