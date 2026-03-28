@@ -40,6 +40,7 @@ data/
 fabric-outputs/
 
 # Personal reference files
+notes/
 EVALUATION.md
 PHASE-2-USER-BILLING-SPEC.md
 PRODUCTION-PROGRESS.md
