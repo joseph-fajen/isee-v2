@@ -122,6 +122,56 @@ PR #42 merged with 4 commits:
 
 ---
 
+### 2026-03-28 (Evening): Translation Fix Confirmed, Annotation Authority Risk Identified
+
+**Queries evaluated:**
+
+1. > "I'm a technical writer designing a personal productivity system built on AI agents. The hard problem isn't capability — it's boundary design. I don't want an agent that does 'everything I ask' because that's actually the failure mode: I'll accidentally delegate the parts of my work that give me meaning. How do I design agent boundaries that preserve the parts worth keeping? Is this even a technical design question, or is it more like deciding what kind of worker I want to be? Maybe the framing is wrong — instead of a hard boundary, maybe I need a 'dimmer switch' that lets me modulate involvement without having to consciously decide what's meaningful in advance. How would experienced workflow designers think about this?"
+
+2. > "I just committed a fix to an LLM pipeline architecture issue. The bug was: when a query gets refined through follow-up questions, downstream agents only saw the refined query — the original was lost. My fix preserves the original query as authoritative and treats refined context as additive. But now I'm second-guessing the design principle itself. Is 'original query is always authoritative' actually the right heuristic? What if the user's original framing was wrong, and the refinement process revealed what they actually needed? By privileging the original, am I cementing a bad frame? Or is preserving the original the only way to maintain user intent as ground truth? I want this pipeline to genuinely challenge my thinking — so tell me: is your fix actually the right design principle, or does it create new problems you haven't seen yet?"
+
+**Translation fix confirmation:**
+
+Both runs confirmed the PR #42 translation fix is working in production:
+
+- **Query 1** preserved the core anxiety framing: "without accidentally automating the parts that make my work worth doing" survived into `queryPlainLanguage`
+- **Query 2** preserved the explicit self-challenge: "is your fix actually the right design principle, or does it create new problems you haven't seen yet" survived into `queryPlainLanguage`
+
+Planted framings survived in both cases. The fidelity instruction in `buildTranslationPrompt` is doing its job.
+
+**Output quality observations:**
+
+**Briefing 2 was the stronger output.** The Advocate/Skeptic dialectic on "users discover intent through interaction, not before it" produced a genuine philosophical insight: the user only discovered their intent was pre-formed because the system broke it. The Skeptic's challenge was sharp, and the rebuttal improved on it rather than deflecting.
+
+The **annotation authority drift risk** emerged from Briefing 2's full analysis — an architectural risk in the current pipeline that wasn't visible before this evaluation session. This has been captured as GitHub issue #47.
+
+**Briefing 1 Idea 2** ("Would I publish this unchanged?") is immediately actionable as a decision rule and represents the kind of non-obvious practical insight ISEE is designed to produce.
+
+**Cluster count as quality signal:**
+
+| Briefing | Cluster count | Approximate runtime |
+|----------|---------------|---------------------|
+| Briefing 1 | 6 clusters | baseline |
+| Briefing 2 | 9 clusters | ~40 seconds longer |
+
+The query with a specific technical premise and embedded self-challenge generated more interpretive divergence. Track cluster count as a leading indicator of output richness going forward.
+
+**What remains open:**
+
+| Item | Status |
+|------|--------|
+| Annotation authority drift | GitHub issue #47 created and detailed |
+| Issues #43–46 from PR #42 | Still in backlog |
+| Cluster count → quality correlation | No regression test confirming this holds across multiple runs |
+
+**What to watch in the next evaluation:**
+
+1. **Cluster count as quality predictor** — Does higher cluster count reliably predict better idea quality, or was this session an outlier?
+2. **Annotation authority drift** — Does the risk identified in issue #47 manifest in longer queries with more complex refinement context?
+3. **Refinement-triggered queries** — Still haven't validated dual-query architecture with a query that actually triggers refinement (both queries in this session were deemed "sufficient").
+
+---
+
 ## Appendix: Files Relevant to Evaluation
 
 | File | Purpose |
