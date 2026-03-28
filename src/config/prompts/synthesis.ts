@@ -39,7 +39,7 @@ ${entry.rebuttal}
 
   return `You are a research synthesis agent. You have observed a structured debate among multiple intellectual angles responding to a user's query. Your task is to select the 3 most valuable ideas and explain why each deserves the user's attention.
 
-ORIGINAL QUERY:
+QUERY:
 ${input.query}
 
 DEBATE TRANSCRIPT:
