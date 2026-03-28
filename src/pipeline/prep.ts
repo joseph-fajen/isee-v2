@@ -10,26 +10,27 @@
 
 import type { Domain } from '../types';
 import { generateDomainsWithClaude } from '../clients/anthropic';
+import type { QueryContext } from '../types';
 import { logger as baseLogger, type Logger } from '../utils/logger';
 
 /**
  * Generate knowledge domains relevant to the given query.
  *
- * @param query - The user's research question
+ * @param queryContext - The user's query (original and optionally refined)
  * @param runLogger - Optional logger with run context (creates default if not provided)
  * @returns Array of 3-5 dynamically generated domains
  */
 export async function generateDomains(
-  query: string,
+  queryContext: QueryContext,
   runLogger?: Logger,
   onDomainsReady?: (domains: Domain[]) => void,
   runId?: string
 ): Promise<Domain[]> {
   const log = runLogger || baseLogger;
 
-  log.info({ queryPreview: query.substring(0, 100) }, 'Prep agent starting domain generation');
+  log.info({ queryPreview: queryContext.originalQuery.substring(0, 100) }, 'Prep agent starting domain generation');
 
-  const domains = await generateDomainsWithClaude(query, log, runId);
+  const domains = await generateDomainsWithClaude(queryContext, log, runId);
 
   // Emit domains for SSE streaming
   onDomainsReady?.(domains);

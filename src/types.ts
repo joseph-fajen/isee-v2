@@ -6,6 +6,26 @@
  */
 
 // ============================================================================
+// Query Context (Dual-Query Handling)
+// ============================================================================
+
+/**
+ * Query context for dual-query handling.
+ * Original query is authoritative; refined query provides additive context only.
+ *
+ * This is the cross-pipeline data contract passed to all agent stages.
+ * When refinement occurred, originalQuery preserves the user's exact words
+ * and refinedQuery carries additive context from follow-up Q&A.
+ * When no refinement occurred, only originalQuery is set.
+ */
+export interface QueryContext {
+  /** The user's original query, verbatim */
+  originalQuery: string;
+  /** The refined query with additional context (only if refinement occurred) */
+  refinedQuery?: string;
+}
+
+// ============================================================================
 // Stage 0: Prep Agent Output
 // ============================================================================
 

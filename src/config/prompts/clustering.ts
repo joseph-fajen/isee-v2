@@ -2,7 +2,7 @@
  * Stage 2: Clustering Agent — Emergent Clustering
  *
  * Purpose: Discover the genuine intellectual shape of the response space
- * Input: Query string and anonymized responses (content only, no metadata)
+ * Input: Original and refined query, plus anonymized responses (content only, no metadata)
  * Output: Prompt string for the Clustering Agent
  *
  * Design notes:
@@ -10,10 +10,14 @@
  * - This ensures clusters represent genuine intellectual angles, not source dimensions
  * - Clusters should be named as arguments/claims, not topics
  * - Target: 5-7 clusters
+ * - Original query is authoritative; refined query provides additive context only
  */
 
 export interface ClusteringPromptInput {
-  query: string;
+  /** The user's original query, verbatim */
+  originalQuery: string;
+  /** The refined query with additional context (only if refinement occurred) */
+  refinedQuery?: string;
   responses: Array<{ index: number; content: string }>;
 }
 
@@ -22,11 +26,22 @@ export function buildClusteringPrompt(input: ClusteringPromptInput): string {
     .map((r) => `[Response ${r.index}]\n${r.content}`)
     .join('\n\n---\n\n');
 
+  const querySection = input.refinedQuery
+    ? `USER'S QUERY (verbatim — this is the authoritative statement of intent):
+${input.originalQuery}
+
+ADDITIONAL CONTEXT (from follow-up questions — additive only, does not override the original):
+${input.refinedQuery}`
+    : `USER'S QUERY (verbatim):
+${input.originalQuery}`;
+
   return `You are an intellectual analyst. You will receive a numbered list of responses to this query:
 
-QUERY: ${input.query}
+${querySection}
 
 Your task is to identify the distinct intellectual angles present across all responses.
+
+IMPORTANT: The user's original query is the ground truth for what they are asking. It may contain deliberate provocations, unusual framings, or explicit hypotheses (e.g., "Is there a third possibility I'm missing?"). When clustering responses, preserve sensitivity to these features — an angle that directly engages a planted hypothesis or inverts the query's framing may be more valuable than one that answers a normalized version of the question. If the additional context seems to flatten or reinterpret the original, defer to the original.
 
 WHAT YOU ARE LOOKING FOR:
 Each "angle" is a distinct position or argument — not a topic or theme. An angle answers the question: "What is this response actually claiming or proposing?"

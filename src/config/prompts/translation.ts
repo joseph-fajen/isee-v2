@@ -57,7 +57,7 @@ TRANSLATION PRINCIPLES:
 - Reference the user's specific situation from their question.
 - Do NOT add new ideas or analysis. You are translating, not creating.
 
-Also provide a plain-language version of the user's question (queryPlainLanguage) — restate it conversationally in 1-2 sentences, as if the user were explaining their problem to a friend.
+Also provide queryPlainLanguage — a faithful restatement of the user's question that preserves their original framing, any explicit hypotheses they embedded (e.g., "Is the real answer neither A nor B, but C?"), and any structural choices in how they posed the question. This is NOT a simplification — it should read as a clear, accurate summary that retains the user's actual intent and rhetorical structure. If the user planted a third option or unusual framing, that must appear in your restatement. Unlike the idea translations, queryPlainLanguage prioritizes fidelity over simplification. 1-3 sentences.
 
 IMPORTANT: Return exactly 3 translated ideas. Do not add, split, or combine ideas.
 

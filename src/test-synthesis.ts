@@ -7,6 +7,7 @@ import { generateDomains } from './pipeline/prep';
 import { generateSynthesisMatrix } from './pipeline/synthesis';
 import { createRunLogger } from './utils/logger';
 import { MODELS } from './config/models';
+import type { QueryContext } from './types';
 
 async function testSynthesis() {
   const query = 'How might we improve decision-making in complex organizations?';
@@ -18,9 +19,11 @@ async function testSynthesis() {
   console.log(`Query: ${query}`);
   console.log('');
 
+  const queryContext: QueryContext = { originalQuery: query };
+
   // Test Prep Agent
   console.log('Testing Prep Agent...');
-  const domains = await generateDomains(query, runLogger);
+  const domains = await generateDomains(queryContext, runLogger);
   console.log(`Generated ${domains.length} domains:`);
   domains.forEach((d) => console.log(`  - ${d.name}: ${d.focus}`));
   console.log('');

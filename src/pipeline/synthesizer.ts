@@ -15,10 +15,12 @@
 
 import type { Domain, DebateEntry, ExtractedIdea, Briefing, RunStats, TranslatedBriefing } from '../types';
 import { generateBriefingWithClaude } from '../clients/anthropic';
+import type { QueryContext } from '../types';
 import { logger as baseLogger, type Logger } from '../utils/logger';
 
 interface SynthesizerConfig {
-  query: string;
+  /** The user's query (original and optionally refined) */
+  queryContext: QueryContext;
   domains: Domain[];
   debateEntries: DebateEntry[];
   stats: Partial<RunStats>;
@@ -30,17 +32,17 @@ interface SynthesizerConfig {
 /**
  * Generate the final briefing from the debate transcript.
  *
- * @param config - Query, debate entries, and run statistics
+ * @param config - QueryContext, debate entries, and run statistics
  * @returns Complete briefing document
  */
 export async function generateBriefing(config: SynthesizerConfig): Promise<Briefing> {
-  const { query, domains, debateEntries, stats, runLogger, onIdeasReady, runId } = config;
+  const { queryContext, domains, debateEntries, stats, runLogger, onIdeasReady, runId } = config;
   const log = runLogger || baseLogger;
 
   log.info({ debateEntryCount: debateEntries.length }, 'Synthesis agent starting');
 
   // Call the LLM to select and explain 3 ideas
-  const ideas = await generateBriefingWithClaude(query, debateEntries, log, runId);
+  const ideas = await generateBriefingWithClaude(queryContext, debateEntries, log, runId);
 
   // Emit ideas for SSE streaming
   onIdeasReady?.(ideas);
@@ -53,8 +55,9 @@ export async function generateBriefing(config: SynthesizerConfig): Promise<Brief
     'Synthesis agent complete'
   );
 
+  // Use the original query as the canonical query in the briefing
   const briefing: Briefing = {
-    query,
+    query: queryContext.originalQuery,
     timestamp: new Date().toISOString(),
     ideas,
     debateTranscript: debateEntries,

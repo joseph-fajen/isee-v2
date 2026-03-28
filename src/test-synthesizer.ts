@@ -5,7 +5,7 @@
 
 import { generateBriefing, renderBriefingMarkdown } from './pipeline/synthesizer';
 import { createRunLogger } from './utils/logger';
-import type { DebateEntry, Domain, TranslatedBriefing } from './types';
+import type { DebateEntry, Domain, TranslatedBriefing, QueryContext } from './types';
 
 // Mock debate entries (simulating tournament output)
 const mockDebateEntries: DebateEntry[] = [
@@ -78,10 +78,12 @@ async function testPhase4() {
   console.log(`Debate entries: ${mockDebateEntries.length}`);
   console.log('');
 
+  const queryContext: QueryContext = { originalQuery: query };
+
   // Test Synthesis Agent
   console.log('Testing Synthesis Agent...');
   const briefing = await generateBriefing({
-    query,
+    queryContext,
     domains: mockDomains,
     debateEntries: mockDebateEntries,
     stats: {

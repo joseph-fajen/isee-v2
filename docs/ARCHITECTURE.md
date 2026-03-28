@@ -131,13 +131,30 @@ This bounded autonomy provides capability while limiting risk — agents can't t
 
 ---
 
+## Dual-Query Context
+
+All pipeline agents receive a `QueryContext` interface rather than a plain string:
+
+```typescript
+interface QueryContext {
+  originalQuery: string;   // User's verbatim query — authoritative for all stages
+  refinedQuery?: string;   // Additive context from follow-up Q&A — only set when refinement occurred
+}
+```
+
+**Hierarchy rule**: `originalQuery` is always the ground truth. `refinedQuery` is additive only — it provides extra context but never overrides the original intent or framing. When no refinement occurred, only `originalQuery` is set.
+
+`Briefing.query` always stores `originalQuery`, ensuring users see their actual question in the output regardless of whether refinement occurred.
+
+---
+
 ## Stage-by-Stage Design
 
 ### Stage 0: Prep Agent
 
-**Purpose**: Generate 3–5 knowledge domains specific to the user's query.  
-**Input**: Raw user query  
-**Output**: Array of domain objects `{ name, description, focus }` 
+**Purpose**: Generate 3–5 knowledge domains specific to the user's query.
+**Input**: `QueryContext` (original query + optional refined query)
+**Output**: Array of domain objects `{ name, description, focus }`
 
 **Why this matters**: v1's `domain_manager.py` described itself as dynamic but was actually a hardcoded list of 15 fixed domains (Urban Planning, Healthcare, Sustainability, etc.) — irrelevant to most queries. In v2, domain generation is a genuine LLM call that happens first, per query, every time. No fixed domain list exists anywhere in the codebase. For a query about governance systems, the Prep Agent might generate: Political Theory, Game Theory, Organizational Psychology, Historical Precedents, Distributed Systems. For a query about creative writing, it generates something entirely different. The domains are invented fresh for each run.
 
@@ -147,8 +164,8 @@ This bounded autonomy provides capability while limiting risk — agents can't t
 
 ### Stage 1: Synthesis Layer
 
-**Purpose**: Generate the raw response matrix.  
-**Input**: Query + domains array + 11 framework templates  
+**Purpose**: Generate the raw response matrix.
+**Input**: Raw query string (extracted from `QueryContext.originalQuery`) + domains array + 11 framework templates
 **Output**: Array of ~60 response objects `{ content, model, framework, domain }`
 
 **Matrix construction**:
@@ -165,8 +182,8 @@ This bounded autonomy provides capability while limiting risk — agents can't t
 
 ### Stage 2: Emergent Clustering Agent
 
-**Purpose**: Discover the genuine intellectual shape of the response space.  
-**Input**: Array of response content strings (no metadata)  
+**Purpose**: Discover the genuine intellectual shape of the response space.
+**Input**: `QueryContext` + array of response content strings (no synthesis metadata — model/framework/domain are withheld)
 **Output**: Array of clusters `{ clusterName, clusterSummary, memberIndices[] }`
 
 **Prompt design (key constraints)**:
@@ -187,7 +204,7 @@ This bounded autonomy provides capability while limiting risk — agents can't t
 **Design**: Sequential advocate → skeptic → rebuttal (one round)
 
 #### Advocate Agents (one per cluster, run in parallel)
-**Input**: The cluster's name, summary, and strongest 2–3 member responses  
+**Input**: `QueryContext` + the cluster's name, summary, and strongest 2–3 member responses
 **Output**: A concise argument for why this cluster's angle is the most valuable response to the original query
 
 **Advocate prompt constraints**:
@@ -196,7 +213,7 @@ This bounded autonomy provides capability while limiting risk — agents can't t
 - Must address why the user would not have found this through ordinary prompting
 
 #### Skeptic Agent (single, runs after all advocates)
-**Input**: All advocate arguments + original query  
+**Input**: `QueryContext` + all advocate arguments
 **Output**: For each advocate: the strongest challenge to its argument
 
 **Skeptic prompt constraints**:
@@ -214,9 +231,9 @@ This is the key confidence mechanism. An idea that cannot survive the skeptic's 
 
 ### Stage 4: Synthesis Agent
 
-**Purpose**: Select 3 ideas and write the briefing.  
-**Input**: Full debate transcript (advocates + skeptic challenges + rebuttals)  
-**Output**: The briefing document
+**Purpose**: Select 3 ideas and write the briefing.
+**Input**: `QueryContext` + full debate transcript (advocates + skeptic challenges + rebuttals)
+**Output**: The briefing document (`Briefing.query` is always set to `originalQuery`)
 
 **Selection criteria the agent is instructed to apply**:
 1. Which idea is most *surprising* — least likely to emerge from a single direct query?
@@ -407,6 +424,12 @@ isee-v2/
 ## Data Contracts (TypeScript Interfaces)
 
 ```typescript
+// Cross-pipeline query context (defined in src/types.ts)
+interface QueryContext {
+  originalQuery: string;  // User's verbatim query — authoritative for all stages
+  refinedQuery?: string;  // Additive context from follow-up Q&A (only if wasRefined=true)
+}
+
 // Stage 0 output
 interface Domain {
   name: string;
