@@ -10,6 +10,17 @@ import { z } from 'zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { Logger } from '../utils/logger';
 import type { Domain, Cluster, SkepticChallenge, ExtractedIdea, DebateEntry, SimplifiedIdea } from '../types';
+
+/**
+ * Query context for dual-query handling.
+ * Original query is authoritative; refined query provides additive context only.
+ */
+export interface QueryContext {
+  /** The user's original query, verbatim */
+  originalQuery: string;
+  /** The refined query with additional context (only if refinement occurred) */
+  refinedQuery?: string;
+}
 import { logLLMCallStart, logLLMCallSuccess, logLLMCallError } from '../utils/logger';
 import { getTracer } from '../observability/tracing';
 import { setLLMAttributes, setLLMResultAttributes, SpanKind } from '../observability/spans';
@@ -128,9 +139,16 @@ const getBreaker = () => getCircuitBreaker('anthropic');
 /**
  * Generate knowledge domains for a query using structured output.
  */
-export async function generateDomainsWithClaude(query: string, logger: Logger, runId?: string): Promise<Domain[]> {
+export async function generateDomainsWithClaude(
+  queryContext: QueryContext,
+  logger: Logger,
+  runId?: string
+): Promise<Domain[]> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
-  const prompt = buildPrepAgentPrompt({ query });
+  const prompt = buildPrepAgentPrompt({
+    originalQuery: queryContext.originalQuery,
+    refinedQuery: queryContext.refinedQuery,
+  });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const callContext = {
@@ -214,13 +232,17 @@ export async function generateDomainsWithClaude(query: string, logger: Logger, r
  * Cluster responses by intellectual angle using structured output.
  */
 export async function clusterResponsesWithClaude(
-  query: string,
+  queryContext: QueryContext,
   anonymizedResponses: Array<{ index: number; content: string }>,
   logger: Logger,
   runId?: string
 ): Promise<Cluster[]> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
-  const prompt = buildClusteringPrompt({ query, responses: anonymizedResponses });
+  const prompt = buildClusteringPrompt({
+    originalQuery: queryContext.originalQuery,
+    refinedQuery: queryContext.refinedQuery,
+    responses: anonymizedResponses,
+  });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const callContext = {
@@ -300,7 +322,7 @@ export async function clusterResponsesWithClaude(
  * Generate an advocate argument for a cluster (prose output).
  */
 export async function generateAdvocateArgument(
-  query: string,
+  queryContext: QueryContext,
   clusterName: string,
   clusterSummary: string,
   topMemberResponses: string[],
@@ -309,7 +331,13 @@ export async function generateAdvocateArgument(
   clusterId?: number
 ): Promise<string> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
-  const prompt = buildAdvocatePrompt({ query, clusterName, clusterSummary, topMemberResponses });
+  const prompt = buildAdvocatePrompt({
+    originalQuery: queryContext.originalQuery,
+    refinedQuery: queryContext.refinedQuery,
+    clusterName,
+    clusterSummary,
+    topMemberResponses,
+  });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const callContext = {
@@ -380,13 +408,17 @@ export async function generateAdvocateArgument(
  * Generate skeptic challenges for all advocate arguments (structured output).
  */
 export async function generateSkepticChallenges(
-  query: string,
+  queryContext: QueryContext,
   advocateArguments: Array<{ clusterId: number; clusterName: string; argument: string }>,
   logger: Logger,
   runId?: string
 ): Promise<SkepticChallenge[]> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
-  const prompt = buildSkepticPrompt({ query, advocateArguments });
+  const prompt = buildSkepticPrompt({
+    originalQuery: queryContext.originalQuery,
+    refinedQuery: queryContext.refinedQuery,
+    advocateArguments,
+  });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const callContext = {
@@ -458,7 +490,7 @@ export async function generateSkepticChallenges(
  * Generate a rebuttal to a skeptic challenge (prose output).
  */
 export async function generateRebuttal(
-  query: string,
+  queryContext: QueryContext,
   clusterName: string,
   advocateArgument: string,
   skepticChallenge: string,
@@ -467,7 +499,13 @@ export async function generateRebuttal(
   clusterId?: number
 ): Promise<string> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
-  const prompt = buildRebuttalPrompt({ query, clusterName, advocateArgument, skepticChallenge });
+  const prompt = buildRebuttalPrompt({
+    originalQuery: queryContext.originalQuery,
+    refinedQuery: queryContext.refinedQuery,
+    clusterName,
+    advocateArgument,
+    skepticChallenge,
+  });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const callContext = {
@@ -724,13 +762,17 @@ export async function rewriteQuery(
  * Generate the final briefing by selecting 3 ideas from the debate (structured output).
  */
 export async function generateBriefingWithClaude(
-  query: string,
+  queryContext: QueryContext,
   debateEntries: DebateEntry[],
   logger: Logger,
   runId?: string
 ): Promise<ExtractedIdea[]> {
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
-  const prompt = buildSynthesisPrompt({ query, debateEntries });
+  const prompt = buildSynthesisPrompt({
+    originalQuery: queryContext.originalQuery,
+    refinedQuery: queryContext.refinedQuery,
+    debateEntries,
+  });
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const callContext = {

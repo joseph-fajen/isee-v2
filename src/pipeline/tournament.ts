@@ -22,11 +22,13 @@ import {
   generateAdvocateArgument,
   generateSkepticChallenges,
   generateRebuttal,
+  type QueryContext,
 } from '../clients/anthropic';
 import { logger as baseLogger, type Logger } from '../utils/logger';
 
 interface TournamentConfig {
-  query: string;
+  /** The user's query (original and optionally refined) */
+  queryContext: QueryContext;
   clusters: Cluster[];
   responses: RawResponse[];
   runLogger?: Logger;
@@ -44,17 +46,17 @@ interface TournamentResult {
 /**
  * Run the full tournament: advocates → skeptic → rebuttals.
  *
- * @param config - Query, clusters, and raw responses
+ * @param config - QueryContext, clusters, and raw responses
  * @returns Complete debate transcript for all clusters
  */
 export async function runTournament(config: TournamentConfig): Promise<TournamentResult> {
-  const { query, clusters, responses, runLogger, runId } = config;
+  const { queryContext, clusters, responses, runLogger, runId } = config;
   const log = runLogger || baseLogger;
 
   log.info({ clusterCount: clusters.length }, 'Tournament starting');
 
   // Phase 3a: Run all advocates in parallel
-  const advocateResults = await runAdvocates(query, clusters, responses, log, config.onAdvocateComplete, runId);
+  const advocateResults = await runAdvocates(queryContext, clusters, responses, log, config.onAdvocateComplete, runId);
   const successfulAdvocates = advocateResults.filter((r) => r.success);
 
   log.info(
@@ -76,7 +78,7 @@ export async function runTournament(config: TournamentConfig): Promise<Tournamen
   let skepticFailed = false;
 
   try {
-    challenges = await runSkeptic(query, advocateArgs, log, runId);
+    challenges = await runSkeptic(queryContext, advocateArgs, log, runId);
     config.onSkepticComplete?.(challenges.length);
     log.info({ challengeCount: challenges.length }, 'Skeptic complete');
   } catch (error) {
@@ -93,7 +95,7 @@ export async function runTournament(config: TournamentConfig): Promise<Tournamen
   // Phase 3c: Run all rebuttals in parallel (skip if skeptic failed — no challenges)
   let rebuttals: RebuttalResult[] = [];
   if (!skepticFailed) {
-    rebuttals = await runRebuttals(query, advocateArgs, challenges, log, config.onRebuttalComplete, runId);
+    rebuttals = await runRebuttals(queryContext, advocateArgs, challenges, log, config.onRebuttalComplete, runId);
 
     const successfulRebuttals = rebuttals.filter((r) => r.success).length;
     log.info({ total: advocateArgs.length, successful: successfulRebuttals }, 'Rebuttals complete');
@@ -122,7 +124,7 @@ interface AdvocateResult {
  * Run advocate agents for all clusters in parallel.
  */
 async function runAdvocates(
-  query: string,
+  queryContext: QueryContext,
   clusters: Cluster[],
   responses: RawResponse[],
   log: Logger,
@@ -135,7 +137,7 @@ async function runAdvocates(
       const topMemberContents = topMembers.map((m) => m.content);
 
       const argumentText = await generateAdvocateArgument(
-        query,
+        queryContext,
         cluster.name,
         cluster.summary,
         topMemberContents,
@@ -179,7 +181,7 @@ async function runAdvocates(
  * Run the skeptic agent (single call, challenges all advocates).
  */
 async function runSkeptic(
-  query: string,
+  queryContext: QueryContext,
   advocateArgs: AdvocateArgument[],
   log: Logger,
   runId?: string
@@ -190,7 +192,7 @@ async function runSkeptic(
     argument: a.argument,
   }));
 
-  const challenges = await generateSkepticChallenges(query, advocateInputs, log, runId);
+  const challenges = await generateSkepticChallenges(queryContext, advocateInputs, log, runId);
 
   return challenges;
 }
@@ -206,7 +208,7 @@ interface RebuttalResult {
  * Run rebuttal agents for all clusters in parallel.
  */
 async function runRebuttals(
-  query: string,
+  queryContext: QueryContext,
   advocateArgs: AdvocateArgument[],
   challenges: SkepticChallenge[],
   log: Logger,
@@ -227,7 +229,7 @@ async function runRebuttals(
 
     try {
       const rebuttalText = await generateRebuttal(
-        query,
+        queryContext,
         arg.clusterName,
         arg.argument,
         challenge.challenge,

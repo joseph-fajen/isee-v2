@@ -10,20 +10,20 @@
  */
 
 import type { RawResponse, AnonymizedResponse, Cluster } from '../types';
-import { clusterResponsesWithClaude } from '../clients/anthropic';
+import { clusterResponsesWithClaude, type QueryContext } from '../clients/anthropic';
 import { logger as baseLogger, type Logger } from '../utils/logger';
 
 /**
  * Cluster responses by emergent intellectual angle.
  *
  * @param responses - Raw responses (metadata will be stripped)
- * @param query - Original query for context
+ * @param queryContext - The user's query (original and optionally refined)
  * @param runLogger - Optional logger with run context
  * @returns Array of 5-7 clusters with argument-style names
  */
 export async function clusterResponses(
   responses: RawResponse[],
-  query: string,
+  queryContext: QueryContext,
   runLogger?: Logger,
   onClustersReady?: (clusters: Cluster[]) => void,
   runId?: string
@@ -35,7 +35,7 @@ export async function clusterResponses(
 
   log.info({ responseCount: anonymized.length }, 'Clustering agent starting');
 
-  const clusters = await clusterResponsesWithClaude(query, anonymized, log, runId);
+  const clusters = await clusterResponsesWithClaude(queryContext, anonymized, log, runId);
 
   // Validate all indices are assigned
   const validation = validateClusterAssignments(clusters, responses.length);

@@ -2,26 +2,39 @@
  * Stage 3c: Rebuttal — Per Cluster Advocate
  *
  * Purpose: Respond directly to the Skeptic's challenge
- * Input: Query, cluster name, original advocate argument, and skeptic challenge
+ * Input: Original and refined query, cluster name, original advocate argument, and skeptic challenge
  * Output: Prompt string for the Rebuttal
  *
  * Design notes:
  * - Partial concession is explicitly permitted and encouraged
  * - An idea that concedes framing weakness but holds substantive claim is more credible
  * - Output is prose (100-150 words), not structured
+ * - Original query is authoritative; refined query provides additive context only
  */
 
 export interface RebuttalPromptInput {
-  query: string;
+  /** The user's original query, verbatim */
+  originalQuery: string;
+  /** The refined query with additional context (only if refinement occurred) */
+  refinedQuery?: string;
   clusterName: string;
   advocateArgument: string;
   skepticChallenge: string;
 }
 
 export function buildRebuttalPrompt(input: RebuttalPromptInput): string {
+  const querySection = input.refinedQuery
+    ? `USER'S QUERY (verbatim — this is the authoritative statement of intent):
+${input.originalQuery}
+
+ADDITIONAL CONTEXT (from follow-up questions — additive only, does not override the original):
+${input.refinedQuery}`
+    : `USER'S QUERY (verbatim):
+${input.originalQuery}`;
+
   return `You are an intellectual advocate defending a position under challenge.
 
-ORIGINAL QUERY: ${input.query}
+${querySection}
 
 YOUR ANGLE:
 Name: ${input.clusterName}

@@ -11,6 +11,7 @@
  */
 
 import type { PipelineConfig, ProgressEvent, Briefing, TranslatedBriefing, RunStats } from './types';
+import type { QueryContext } from './clients/anthropic';
 import { generateDomains } from './pipeline/prep';
 import { generateSynthesisMatrix } from './pipeline/synthesis';
 import { clusterResponses } from './pipeline/clustering';
@@ -98,6 +99,13 @@ export async function runPipeline(
       rootSpan.setAttribute('pipeline.run_id', runId);
       rootSpan.setAttribute('pipeline.query_length', query.length);
 
+      // Construct query context for dual-query handling
+      // Original query is authoritative; refined query provides additive context only
+      const queryContext: QueryContext = {
+        originalQuery: config.refinement?.originalQuery ?? query,
+        refinedQuery: config.refinement?.wasRefined ? query : undefined,
+      };
+
       // =========================================================================
       // Stage 0: Prep Agent - Domain Generation
       // =========================================================================
@@ -105,7 +113,7 @@ export async function runPipeline(
       const prepStart = Date.now();
 
       const domains = await withSpan('isee.stage.prep', async () => {
-        return generateDomains(query, runLogger, (generatedDomains) => {
+        return generateDomains(queryContext, runLogger, (generatedDomains) => {
           emit('prep', 'progress', `Generated ${generatedDomains.length} domains`, {
             detail: {
               type: 'domains',
@@ -156,7 +164,7 @@ export async function runPipeline(
 
       const clusters = await withSpan('isee.stage.clustering', async (span) => {
         span.setAttribute('clustering.response_count', responses.length);
-        return clusterResponses(responses, query, runLogger, (identifiedClusters) => {
+        return clusterResponses(responses, queryContext, runLogger, (identifiedClusters) => {
           emit('clustering', 'progress', `Identified ${identifiedClusters.length} clusters`, {
             detail: {
               type: 'clusters',
@@ -182,7 +190,7 @@ export async function runPipeline(
       const { debateEntries } = await withSpan('isee.stage.tournament', async (span) => {
         span.setAttribute('tournament.cluster_count', totalClusters);
         return runTournament({
-          query,
+          queryContext,
           clusters,
           responses,
           runLogger,
@@ -228,7 +236,7 @@ export async function runPipeline(
 
       const briefing = await withSpan('isee.stage.synthesizer', async () => {
         return generateBriefing({
-          query,
+          queryContext,
           domains,
           debateEntries,
           stats: partialStats,
