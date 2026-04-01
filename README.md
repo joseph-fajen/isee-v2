@@ -51,7 +51,7 @@ ISEE v2 is fully functional and production-ready.
 
 ### Core Pipeline
 - Smart query refinement with follow-up questions
-- Multi-model synthesis (8 models × 11 cognitive frameworks × dynamic domains)
+- Multi-model synthesis (6 models × 11 cognitive frameworks × dynamic domains)
 - Emergent clustering by intellectual angle
 - Advocate/Skeptic/Rebuttal tournament debate
 - Plain-language briefings with concrete action items

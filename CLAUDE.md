@@ -133,6 +133,7 @@ Reference [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed build phases.
 - [PRD.md](./docs/PRD.md) - Product requirements, design principles, success criteria
 - [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - Stage-by-stage design, data contracts, project structure
 - [evaluation-log.md](./docs/evaluation-log.md) - Output quality evaluation methodology and session log
+- [FAQ.md](./docs/FAQ.md) - Frequently asked questions about ISEE's design and operation
 
 ## What NOT to Build
 
