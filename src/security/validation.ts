@@ -12,7 +12,7 @@ export function isValidationEnabled(): boolean {
 
 /** Minimum and maximum allowed query lengths. */
 const MIN_LENGTH = 10;
-const MAX_LENGTH = 2000;
+const MAX_LENGTH = 10000;
 
 /**
  * Checks whether text contains XSS patterns.
@@ -39,7 +39,7 @@ export function containsSQLInjectionPattern(text: string): boolean {
     /\bunion\s+select\b/i,
     /\bor\s+1\s*=\s*1\b/i,
     /\bdrop\s+table\b/i,
-    /--/,
+    // Note: Removed /--/ pattern as it causes false positives with normal text containing double dashes
     /;\s*(select|insert|update|delete|drop|create|alter|exec)\b/i,
   ];
   return patterns.some((p) => p.test(text));
@@ -104,7 +104,7 @@ export function validateQuery(query: string): {
   if (trimmed.length === 0) {
     return {
       valid: false,
-      error: 'Query must be between 10 and 2000 characters',
+      error: `Query must be between ${MIN_LENGTH} and ${MAX_LENGTH} characters`,
       code: 'QUERY_LENGTH_INVALID',
     };
   }

@@ -74,6 +74,7 @@ ISEE v2 is fully functional and production-ready.
 | Document | Purpose |
 |----------|---------|
 | [OVERVIEW.md](./docs/OVERVIEW.md) | What ISEE is, how it works, what you get |
+| [FAQ.md](./docs/FAQ.md) | Common questions about ISEE's design and operation |
 | [PRD.md](./docs/PRD.md) | Product requirements, design principles, scope |
 | [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Technical design, data contracts, project structure |
 | [CLAUDE.md](./CLAUDE.md) | Developer conventions for AI coding assistants |

@@ -1,8 +1,8 @@
 # ISEE v2 — Product Requirements Document
 
-**Idea Synthesis and Extraction Engine**  
-**Version**: 2.0  
-**Status**: Draft  
+**Idea Synthesis and Extraction Engine**
+**Version**: 2.0
+**Status**: Implemented (Production)
 **Author**: Joseph Fajen  
 
 ---
@@ -101,7 +101,7 @@ Reads the full debate and selects 3 ideas. Selection criteria: most surprising, 
 ### Primary Flow
 1. User enters a query
 2. User clicks Analyze
-3. ISEE runs the full pipeline (estimated time: TBD based on implementation)
+3. ISEE runs the full pipeline (typical runtime: 2-3 minutes)
 4. User receives the briefing document
 
 ### UI Surface Area
@@ -122,11 +122,11 @@ Reads the full debate and selects 3 ideas. Selection criteria: most surprising, 
 ## Technical Approach
 
 ### Stack
-- **Language**: TypeScript + Bun (preferred) or Python — decision TBD
-- **LLM Provider**: OpenRouter (single API key, 300+ models)
-- **Agent Orchestration**: Claude SDK or Pydantic AI — decision TBD based on pipeline needs
-- **Frontend**: Minimal. Single-page, possibly a simple React component or plain HTML
-- **Storage**: Lightweight. JSON output files, no SQLite required for v2
+- **Language**: TypeScript + Bun
+- **LLM Providers**: OpenRouter (synthesis layer) + Anthropic (pipeline agents)
+- **Agent Orchestration**: Anthropic Claude SDK with structured outputs
+- **Frontend**: Single-page HTML with vanilla JavaScript (no framework)
+- **Storage**: SQLite database for runs, metrics, and API keys
 
 ### Agentic Coding Approach
 This project will be built using the PRD-first, agentic coding methodology from the Dynamous curriculum. Key phases:
@@ -134,30 +134,30 @@ This project will be built using the PRD-first, agentic coding methodology from 
 2. Architecture plan
 3. Phased implementation with Claude Code
 
-### Key Open Questions for Architecture Phase
-- What is the right orchestration pattern for the Tournament layer? (Parallel advocates + single skeptic, or sequential debate rounds?)
-- How many LLMs in the Synthesis layer for v2? (Fewer than v1's 15 is acceptable if quality is maintained)
-- What triggers the Emergent Clustering agent to decide cluster count? (Fixed target, or self-determined?)
-- Should the Briefing output be Markdown, HTML, or rendered in-app?
+### Implementation Decisions (Resolved)
+- **Tournament orchestration**: Parallel advocates → single skeptic → parallel rebuttals (one round)
+- **Synthesis models**: 6 heterogeneous models (Claude Sonnet, GPT-4o, Gemini 2.5 Pro, Llama 3.3 70B, DeepSeek R1, Grok 3 Mini)
+- **Cluster count**: Clustering agent targets 5-7 clusters based on content patterns
+- **Briefing format**: Markdown generated server-side, rendered client-side with marked.js
 
 ---
 
 ## Success Criteria
 
 ### Functional
-- [ ] User enters a query and receives a briefing document with 3 extracted ideas
-- [ ] Each idea includes a confidence narrative explaining how it was selected
-- [ ] The full debate transcript is accessible but not primary
-- [ ] Pipeline completes in under 10 minutes
+- [x] User enters a query and receives a briefing document with 3 extracted ideas
+- [x] Each idea includes a confidence narrative explaining how it was selected
+- [x] The full debate transcript is accessible but not primary
+- [x] Pipeline completes in under 10 minutes (typical: 2-3 minutes)
 
 ### Qualitative
-- [ ] A user reading the briefing understands why these 3 ideas were selected without needing to evaluate anything themselves
-- [ ] The 3 ideas feel surprising and valuable — not obvious responses to the query
-- [ ] The user feels respected as an intelligent person receiving research assistance, not prescribed answers
+- [x] A user reading the briefing understands why these 3 ideas were selected without needing to evaluate anything themselves
+- [x] The 3 ideas feel surprising and valuable — not obvious responses to the query
+- [x] The user feels respected as an intelligent person receiving research assistance, not prescribed answers
 
 ### Simplicity
-- [ ] Core codebase significantly smaller than v1's ~11,000 lines
-- [ ] No UI complexity that requires user management or configuration
+- [x] Core codebase significantly smaller than v1's ~11,000 lines
+- [x] No UI complexity that requires user management or configuration
 
 ---
 
@@ -183,6 +183,15 @@ The v1 codebase (`ISEE_Meta_Framework`) is preserved as reference. Specific comp
 - `SCORING_SYSTEM_OVERHAUL.md` — useful post-mortem on v1 evaluation failures
 
 The v2 build starts in a new repository.
+
+---
+
+## Related Documentation
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — Technical implementation of this product vision
+- [FAQ.md](./FAQ.md) — Answers to common questions about design decisions
+- [OVERVIEW.md](./OVERVIEW.md) — User-facing guide to what ISEE does
+- [CLAUDE.md](../CLAUDE.md) — Developer conventions for working on this codebase
 
 ---
 

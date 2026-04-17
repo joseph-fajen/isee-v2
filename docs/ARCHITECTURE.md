@@ -523,4 +523,13 @@ All phases have been implemented and are in production.
 
 ---
 
+## Related Documentation
+
+- [FAQ.md](./FAQ.md) — Answers to common questions about ISEE's design choices
+- [PRD.md](./PRD.md) — Product requirements and design principles
+- [OVERVIEW.md](./OVERVIEW.md) — User-facing explanation of how ISEE works
+- [CLAUDE.md](../CLAUDE.md) — Developer conventions for working on this codebase
+
+---
+
 *Last updated: March 2026 (updated to reflect production state and agentic design patterns)*

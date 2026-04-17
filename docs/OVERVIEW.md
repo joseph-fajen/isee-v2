@@ -155,6 +155,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for tech stack, project structure, data
 
 ## Further Reading
 
+- [FAQ.md](./FAQ.md) — Common questions about ISEE's design and operation
 - [PRD.md](./PRD.md) — Design principles, scope boundaries, success criteria
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — Stage-by-stage technical design, data contracts, project structure
 - [CLAUDE.md](../CLAUDE.md) — Developer conventions for working on this codebase
