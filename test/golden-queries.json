@@ -6,7 +6,7 @@
       "minClusters": 3,
       "maxClusters": 10,
       "minIdeas": 3,
-      "maxDurationMs": 420000
+      "maxDurationMs": 540000
     }
   },
   {
@@ -16,7 +16,7 @@
       "minClusters": 3,
       "maxClusters": 10,
       "minIdeas": 3,
-      "maxDurationMs": 420000
+      "maxDurationMs": 540000
     }
   },
   {
@@ -26,7 +26,7 @@
       "minClusters": 3,
       "maxClusters": 10,
       "minIdeas": 3,
-      "maxDurationMs": 420000
+      "maxDurationMs": 540000
     }
   }
 ]
