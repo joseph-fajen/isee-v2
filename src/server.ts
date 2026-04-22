@@ -123,7 +123,7 @@ async function routeRequest(req: Request, url: URL, path: string, method: string
   // Serve filtered OVERVIEW.md for About modal
   if (method === 'GET' && path === '/about') {
     try {
-      const content = await Bun.file('OVERVIEW.md').text();
+      const content = await Bun.file('docs/OVERVIEW.md').text();
       const filtered = filterOverviewForUsers(content);
       return new Response(filtered, {
         headers: { 'Content-Type': 'text/plain' },
