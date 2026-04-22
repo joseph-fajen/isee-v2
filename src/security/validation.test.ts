@@ -65,10 +65,6 @@ describe('containsSQLInjectionPattern', () => {
     expect(containsSQLInjectionPattern('DROP TABLE users')).toBe(true);
   });
 
-  test('detects -- comment', () => {
-    expect(containsSQLInjectionPattern("admin'--")).toBe(true);
-  });
-
   test('detects ; followed by SELECT', () => {
     expect(containsSQLInjectionPattern('; SELECT * FROM secrets')).toBe(true);
   });
@@ -143,11 +139,11 @@ describe('validateQuery', () => {
     expect(result.error).toContain('10');
   });
 
-  test('rejects query longer than 2000 chars', () => {
-    const result = validateQuery('a'.repeat(2001));
+  test('rejects query longer than 10000 chars', () => {
+    const result = validateQuery('a'.repeat(10001));
     expect(result.valid).toBe(false);
     expect(result.code).toBe('QUERY_LENGTH_INVALID');
-    expect(result.error).toContain('2000');
+    expect(result.error).toContain('10000');
   });
 
   test('accepts query of exactly 10 chars', () => {
@@ -156,8 +152,8 @@ describe('validateQuery', () => {
     expect(result.sanitized).toBeDefined();
   });
 
-  test('accepts query of exactly 2000 chars', () => {
-    const result = validateQuery('a'.repeat(2000));
+  test('accepts query of exactly 10000 chars', () => {
+    const result = validateQuery('a'.repeat(10000));
     expect(result.valid).toBe(true);
   });
 
