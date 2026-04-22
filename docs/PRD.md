@@ -136,7 +136,7 @@ This project will be built using the PRD-first, agentic coding methodology from 
 
 ### Implementation Decisions (Resolved)
 - **Tournament orchestration**: Parallel advocates → single skeptic → parallel rebuttals (one round)
-- **Synthesis models**: 6 heterogeneous models (Claude Sonnet, GPT-4o, Gemini 2.5 Pro, Llama 3.3 70B, DeepSeek R1, Grok 3 Mini)
+- **Synthesis models**: 6 heterogeneous models (Claude Sonnet, GPT-4o, Gemini 2.5 Pro, Llama 3.3 70B, Qwen 3.6 Plus, Grok 3 Mini)
 - **Cluster count**: Clustering agent targets 5-7 clusters based on content patterns
 - **Briefing format**: Markdown generated server-side, rendered client-side with marked.js
 

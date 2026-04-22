@@ -7,14 +7,14 @@
 
 /** Timeout constants in milliseconds */
 export const TIMEOUTS = {
-  /** Individual LLM call — most complete in 5-15s */
-  LLM_CALL_MS: 60_000,
-  /** Synthesis stage — ~60 parallel calls, can take 3-4 minutes */
-  SYNTHESIS_STAGE_MS: 300_000,
-  /** Full pipeline — 7 minutes max (synthesis ~3-4min + other stages ~2-3min) */
-  FULL_PIPELINE_MS: 420_000,
+  /** Individual LLM call — most complete in 5-15s, but some models (DeepSeek, Gemini) need up to 120s for complex reasoning */
+  LLM_CALL_MS: 120_000,
+  /** Synthesis stage — ~60 parallel calls, can take 4-5 minutes with 120s timeout */
+  SYNTHESIS_STAGE_MS: 360_000,
+  /** Full pipeline — 10 minutes max (synthesis ~4-5min + other stages ~2-3min) */
+  FULL_PIPELINE_MS: 600_000,
   /** SSE connection — allow for full pipeline + buffer */
-  SSE_CONNECTION_MS: 480_000,
+  SSE_CONNECTION_MS: 660_000,
 } as const;
 
 /**

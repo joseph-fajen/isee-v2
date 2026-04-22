@@ -46,7 +46,7 @@ Yes, with code changes. You'd need to:
 
 ### Could It Run With Just Anthropic?
 
-Also possible, but you'd lose model diversity in synthesis. The synthesis layer queries 6 different models (GPT-4o, Gemini, Llama, DeepSeek, Grok, and Claude Sonnet via OpenRouter) to generate genuinely different perspectives. Using only Claude would defeat this purpose.
+Also possible, but you'd lose model diversity in synthesis. The synthesis layer queries 6 different models (GPT-4o, Gemini, Llama, Qwen, Grok, and Claude Sonnet via OpenRouter) to generate genuinely different perspectives. Using only Claude would defeat this purpose.
 
 ### Is It Worth Changing?
 

@@ -306,7 +306,7 @@ Recommended starting set (all available via OpenRouter):
 2. `openai/gpt-4o` — broad knowledge, reliable
 3. `google/gemini-2.5-pro` — strong cross-domain connections
 4. `meta-llama/llama-3.3-70b` — open-source reasoning patterns differ meaningfully
-5. `deepseek/deepseek-chat` — mathematical/structured reasoning
+5. `qwen/qwen3.6-plus` — MoE architecture with reasoning tokens, Chinese model perspective
 6. `x-ai/grok-3-mini` — contrarian tendency (valuable for debate seeding)
 
 **Why 6 not 12–15**: v1's 15-model set added marginal diversity while significantly increasing cost and complexity. 6 well-chosen heterogeneous models × 11 frameworks × 3–5 domains produces sufficient combinatorial space. Quality over quantity.

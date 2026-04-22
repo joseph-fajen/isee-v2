@@ -136,7 +136,7 @@ ISEE queries 6 heterogeneous AI models through OpenRouter for the synthesis laye
 | GPT-4o | Broad knowledge, reliable structure |
 | Gemini 2.5 Pro | Cross-domain connections, thinking model |
 | Llama 3.3 70B | Different training perspective |
-| DeepSeek R1 | Technical depth, reasoning focus |
+| Qwen 3.6 Plus | MoE architecture, reasoning tokens, Chinese perspective |
 | Grok 3 Mini | Contrarian tendencies, debate seeding |
 
 ## The Frameworks

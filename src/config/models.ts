@@ -8,6 +8,9 @@
  * - Quality over quantity: 6 well-chosen models vs 12-15 marginal diversity
  * - Each model brings meaningfully different reasoning patterns
  * - Balanced across providers and architectures
+ *
+ * NOTE: DeepSeek removed due to chronic 120s+ latency on complex prompts
+ * NOTE: Qwen 3.6 Plus added - MoE architecture, reasoning tokens, fast, budget tier
  */
 
 import type { SynthesisModel } from '../types';
@@ -43,10 +46,10 @@ export const MODELS: SynthesisModel[] = [
     costTier: 'standard',
   },
   {
-    id: 'deepseek',
-    name: 'DeepSeek Chat',
-    openRouterId: 'deepseek/deepseek-chat',
-    description: 'Mathematical and structured reasoning',
+    id: 'qwen-3.6-plus',
+    name: 'Qwen 3.6 Plus',
+    openRouterId: 'qwen/qwen3.6-plus',
+    description: 'MoE architecture with reasoning tokens, Chinese model perspective',
     costTier: 'budget',
   },
   {
