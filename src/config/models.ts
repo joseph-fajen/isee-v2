@@ -1,16 +1,16 @@
 /**
  * Synthesis Model Definitions
  *
- * 6 heterogeneous models chosen for genuine cognitive diversity.
+ * 5 heterogeneous models chosen for genuine cognitive diversity.
  * These are accessed via OpenRouter using their model IDs.
  *
  * Selection rationale (from ARCHITECTURE.md):
- * - Quality over quantity: 6 well-chosen models vs 12-15 marginal diversity
+ * - Quality over quantity: well-chosen models vs marginal diversity
  * - Each model brings meaningfully different reasoning patterns
  * - Balanced across providers and architectures
  *
  * NOTE: DeepSeek removed due to chronic 120s+ latency on complex prompts
- * NOTE: Qwen 3.6 Plus added - MoE architecture, reasoning tokens, fast, budget tier
+ * NOTE: Qwen 3.6 Plus temporarily disabled - consistent timeout issues (100-120s per call)
  */
 
 import type { SynthesisModel } from '../types';
@@ -45,13 +45,15 @@ export const MODELS: SynthesisModel[] = [
     description: 'Open-source reasoning patterns differ meaningfully',
     costTier: 'standard',
   },
-  {
-    id: 'qwen-3.6-plus',
-    name: 'Qwen 3.6 Plus',
-    openRouterId: 'qwen/qwen3.6-plus',
-    description: 'MoE architecture with reasoning tokens, Chinese model perspective',
-    costTier: 'budget',
-  },
+  // TEMPORARILY DISABLED: Qwen 3.6 Plus - consistent timeout issues (100-120s per call)
+  // Causing circuit breaker trips and cascade failures
+  // {
+  //   id: 'qwen-3.6-plus',
+  //   name: 'Qwen 3.6 Plus',
+  //   openRouterId: 'qwen/qwen3.6-plus',
+  //   description: 'MoE architecture with reasoning tokens, Chinese model perspective',
+  //   costTier: 'budget',
+  // },
   {
     id: 'grok-mini',
     name: 'Grok 3 Mini',
