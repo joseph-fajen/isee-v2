@@ -348,6 +348,12 @@ export interface SynthesisModel {
   costTier: 'budget' | 'standard' | 'premium';
   /** Optional max tokens override for thinking models that need more headroom */
   maxTokens?: number;
+  /**
+   * Ask OpenRouter to skip the model's hidden reasoning step (`reasoning: { enabled: false }`).
+   * For reasoning models that spend most of a call thinking before they answer.
+   * If the model rejects it, the call is retried without it.
+   */
+  disableReasoning?: boolean;
 }
 
 // ============================================================================

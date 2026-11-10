@@ -81,6 +81,7 @@ export async function generateSynthesisMatrix(
           model: combo.model.openRouterId,
           prompt,
           maxTokens: combo.model.maxTokens,
+          disableReasoning: combo.model.disableReasoning,
           logger: log,
           context: {
             framework: combo.framework.id,

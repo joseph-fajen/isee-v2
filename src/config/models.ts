@@ -1,7 +1,7 @@
 /**
  * Synthesis Model Definitions
  *
- * 5 heterogeneous models chosen for genuine cognitive diversity.
+ * 6 heterogeneous models chosen for genuine cognitive diversity.
  * These are accessed via OpenRouter using their model IDs.
  *
  * Selection rationale (from ARCHITECTURE.md):
@@ -10,7 +10,7 @@
  * - Balanced across providers and architectures
  *
  * NOTE: DeepSeek removed due to chronic 120s+ latency on complex prompts
- * NOTE: Qwen 3.6 Plus temporarily disabled - consistent timeout issues (100-120s per call)
+ * NOTE: Qwen 3.6 Plus runs with reasoning disabled - it timed out (100-120s per call) with it on
  */
 
 import type { SynthesisModel } from '../types';
@@ -45,15 +45,15 @@ export const MODELS: SynthesisModel[] = [
     description: 'Open-source reasoning patterns differ meaningfully',
     costTier: 'standard',
   },
-  // TEMPORARILY DISABLED: Qwen 3.6 Plus - consistent timeout issues (100-120s per call)
-  // Causing circuit breaker trips and cascade failures
-  // {
-  //   id: 'qwen-3.6-plus',
-  //   name: 'Qwen 3.6 Plus',
-  //   openRouterId: 'qwen/qwen3.6-plus',
-  //   description: 'MoE architecture with reasoning tokens, Chinese model perspective',
-  //   costTier: 'budget',
-  // },
+  {
+    id: 'qwen-3.6-plus',
+    name: 'Qwen 3.6 Plus',
+    openRouterId: 'qwen/qwen3.6-plus',
+    description: 'MoE architecture, Chinese model perspective',
+    costTier: 'budget',
+    // Previously timed out at 100-120s per call, most of it spent on hidden reasoning
+    disableReasoning: true,
+  },
   {
     id: 'grok-mini',
     name: 'Grok 3 Mini',

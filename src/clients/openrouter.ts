@@ -41,6 +41,8 @@ export interface OpenRouterCallOptions {
   model: string; // OpenRouter model ID (e.g., 'anthropic/claude-sonnet-4')
   prompt: string;
   maxTokens?: number;
+  /** Send `reasoning: { enabled: false }`; dropped automatically if the model rejects it */
+  disableReasoning?: boolean;
   logger: Logger;
   context: {
     framework: string;
@@ -61,12 +63,21 @@ export interface OpenRouterResult {
   costUsd?: number;
 }
 
+/** True for a 400 error whose message is about the reasoning parameter. */
+export function isReasoningRejection(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  const message = err instanceof Error ? err.message : String(err);
+  return status === 400 && /reasoning/i.test(message);
+}
+
 /**
  * Call an OpenRouter model with retry logic and circuit breaker protection.
  * Throws CircuitOpenError immediately if the OpenRouter circuit is open.
  */
 export async function callOpenRouter(options: OpenRouterCallOptions): Promise<OpenRouterResult> {
   const { model, prompt, maxTokens = 1500, logger, context, runId } = options;
+  // Cleared for the rest of this call if the model refuses to turn reasoning off
+  let sendReasoningOff = options.disableReasoning === true;
   const maxAttempts = DEFAULT_RETRY_CONFIG.maxAttempts;
   const breaker = getCircuitBreaker('openrouter');
 
@@ -93,14 +104,30 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
     });
 
     try {
-      const completion = await breaker.execute(() => getClient().chat.completions.create(
+      const request = () => getClient().chat.completions.create(
         {
           model,
           max_tokens: maxTokens,
           messages: [{ role: 'user', content: prompt }],
-        },
+          // OpenRouter-specific field, not in the OpenAI SDK types
+          ...(sendReasoningOff ? { reasoning: { enabled: false } } : {}),
+        } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         { signal: createTimeoutSignal(TIMEOUTS.LLM_CALL_MS) }
-      ));
+      );
+
+      const completion = await breaker.execute(async () => {
+        try {
+          return await request();
+        } catch (err) {
+          // Some models insist on reasoning: retry once without the setting
+          if (sendReasoningOff && isReasoningRejection(err)) {
+            sendReasoningOff = false;
+            logger.warn({ model }, 'Model rejected reasoning: { enabled: false }; retrying with reasoning on');
+            return await request();
+          }
+          throw err;
+        }
+      });
 
       const durationMs = Date.now() - startTime;
       const content = completion.choices[0]?.message?.content || '';
